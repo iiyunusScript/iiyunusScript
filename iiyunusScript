@@ -108,6 +108,7 @@ end
 local playerPage = createPage()
 local espPage = createPage()
 local tpPage = createPage()
+local desyncPage = createPage() -- Ajout de la page
 
 -- 5. COMPOSANTS RÉUTILISABLES
 local function createValueSetting(parent, labelText, defaultValue, callbackValue)
@@ -178,7 +179,7 @@ flyBtn.MouseButton1Click:Connect(function()
     pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end)
 end)
 
--- 7. LOGIQUE ESP (TON SCRIPT EXACT)
+-- 7. LOGIQUE ESP (TON CODE ORIGINAL)
 local function getESPColor(targetPlr)
     if targetPlr.Team ~= nil and player.Team ~= nil then
         return (targetPlr.Team == player.Team) and Color3.new(0, 0, 1) or Color3.new(1, 0, 0)
@@ -237,24 +238,20 @@ local function applyBotESP(model)
     local hum = model:FindFirstChildOfClass("Humanoid")
     local hrp = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
     if not hum or not hrp then return end
-
     local name = model.Name:lower()
     local ignoreNames = {"merchant", "shop", "magasin", "quest", "vendeur", "dealer", "job", "dummy"}
     for _, word in pairs(ignoreNames) do if name:find(word) then return end end
     if hrp.Anchored and hum.MaxHealth > 100000 then return end
-
     local color = Color3.new(1, 0.8, 0)
     local highlight = Instance.new("Highlight", model)
     highlight.FillTransparency = 0.6
     highlight.OutlineColor = color
     highlight.FillColor = color
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    
     local bgui = Instance.new("BillboardGui", hrp)
     bgui.Size = UDim2.new(0, 150, 0, 50)
     bgui.StudsOffset = Vector3.new(0, 3.5, 0)
     bgui.AlwaysOnTop = true
-    
     local nameLabel = Instance.new("TextLabel", bgui)
     nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
     nameLabel.BackgroundTransparency = 1
@@ -262,7 +259,6 @@ local function applyBotESP(model)
     nameLabel.Font = Enum.Font.GothamBold
     nameLabel.TextSize = 14
     nameLabel.Text = model.Name
-
     local infoLabel = Instance.new("TextLabel", bgui)
     infoLabel.Size = UDim2.new(1, 0, 0.4, 0)
     infoLabel.Position = UDim2.new(0, 0, 0.45, 0)
@@ -270,24 +266,17 @@ local function applyBotESP(model)
     infoLabel.TextColor3 = color
     infoLabel.Font = Enum.Font.GothamSemibold
     infoLabel.TextSize = 12
-
     local conn
     conn = RS.RenderStepped:Connect(function()
         if not model.Parent or not hrp.Parent or hum.Health <= 0 then
-            highlight:Destroy()
-            bgui:Destroy()
-            conn:Disconnect()
-            return
+            highlight:Destroy(); bgui:Destroy(); conn:Disconnect(); return
         end
-
         if _G.ESP_BOTS_ENABLED and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            highlight.Enabled = true
-            bgui.Enabled = true
+            highlight.Enabled, bgui.Enabled = true, true
             local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
             infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
         else
-            highlight.Enabled = false
-            bgui.Enabled = false
+            highlight.Enabled, bgui.Enabled = false, false
         end
     end)
 end
@@ -312,11 +301,10 @@ scanForBots()
 addToggle(espPage, "ESP Player", function() _G.ESP_ALL_ENABLED = not _G.ESP_ALL_ENABLED return _G.ESP_ALL_ENABLED end)
 addToggle(espPage, "ESP Bot / NPC", function() _G.ESP_BOTS_ENABLED = not _G.ESP_BOTS_ENABLED return _G.ESP_BOTS_ENABLED end)
 
--- 9. TELEPORT PAGE
+-- 9. TELEPORT PAGE (TON CODE ORIGINAL)
 local tpHeaderFrame = Instance.new("Frame", tpPage)
 tpHeaderFrame.Size = UDim2.new(1, 0, 0, 25)
 tpHeaderFrame.BackgroundTransparency = 1
-
 local tpLabel = Instance.new("TextLabel", tpHeaderFrame)
 tpLabel.Size = UDim2.new(0.7, 0, 1, 0)
 tpLabel.Text = "Teleport to player :"
@@ -325,7 +313,6 @@ tpLabel.BackgroundTransparency = 1
 tpLabel.Font = Enum.Font.GothamBold
 tpLabel.TextSize = 12
 tpLabel.TextXAlignment = Enum.TextXAlignment.Left
-
 local listVisible = true
 local toggleListBtn = Instance.new("TextButton", tpHeaderFrame)
 toggleListBtn.Size = UDim2.new(0, 30, 0, 20)
@@ -334,14 +321,12 @@ toggleListBtn.Text = "▲"
 toggleListBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
 toggleListBtn.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", toggleListBtn)
-
 local tpScroll = Instance.new("ScrollingFrame", tpPage)
 tpScroll.Size = UDim2.new(1, -5, 0, 70)
 tpScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 tpScroll.ScrollBarThickness = 2
 Instance.new("UICorner", tpScroll)
 local tpListLayout = Instance.new("UIListLayout", tpScroll)
-
 local searchInput = Instance.new("TextBox", tpPage)
 searchInput.Size = UDim2.new(1, -5, 0, 30)
 searchInput.PlaceholderText = "Pseudo..."
@@ -349,11 +334,9 @@ searchInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 searchInput.TextColor3 = Color3.new(1, 1, 1)
 searchInput.TextSize = 12
 Instance.new("UICorner", searchInput)
-
 local actionFrame = Instance.new("Frame", tpPage)
 actionFrame.Size = UDim2.new(1, -5, 0, 30)
 actionFrame.BackgroundTransparency = 1
-
 local tpBtn = Instance.new("TextButton", actionFrame)
 tpBtn.Size = UDim2.new(0.48, 0, 1, 0)
 tpBtn.Text = "TELEPORT"
@@ -362,7 +345,6 @@ tpBtn.TextColor3 = Color3.new(1,1,1)
 tpBtn.TextSize = 12
 tpBtn.Font = Enum.Font.GothamBold
 Instance.new("UICorner", tpBtn)
-
 local specBtn = Instance.new("TextButton", actionFrame)
 specBtn.Size = UDim2.new(0.48, 0, 1, 0)
 specBtn.Position = UDim2.new(0.52, 0, 0, 0)
@@ -375,7 +357,6 @@ Instance.new("UICorner", specBtn)
 
 addToggle(tpPage, "Click TP", function() _G.ClickTPEnabled = not _G.ClickTPEnabled return _G.ClickTPEnabled end)
 
--- Fonctionnalité de la liste des joueurs
 toggleListBtn.MouseButton1Click:Connect(function()
     listVisible = not listVisible
     tpScroll.Visible = listVisible
@@ -383,9 +364,7 @@ toggleListBtn.MouseButton1Click:Connect(function()
 end)
 
 local function updateTPList()
-    for _,v in pairs(tpScroll:GetChildren()) do
-        if v:IsA("TextButton") then v:Destroy() end
-    end
+    for _,v in pairs(tpScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
     for _,p in pairs(game.Players:GetPlayers()) do
         if p ~= player then
             local b = Instance.new("TextButton", tpScroll)
@@ -403,13 +382,10 @@ game.Players.PlayerAdded:Connect(updateTPList)
 game.Players.PlayerRemoving:Connect(updateTPList)
 updateTPList()
 
--- Fonctionnalité TP / Spectate
 local function getTargetPlayer()
     local text = searchInput.Text:lower()
     for _, p in pairs(game.Players:GetPlayers()) do
-        if string.find(p.Name:lower(), text) or string.find(p.DisplayName:lower(), text) then
-            return p
-        end
+        if string.find(p.Name:lower(), text) or string.find(p.DisplayName:lower(), text) then return p end
     end
     return nil
 end
@@ -428,39 +404,51 @@ specBtn.MouseButton1Click:Connect(function()
         local target = getTargetPlayer()
         if target and target.Character then
             workspace.CurrentCamera.CameraSubject = target.Character.Humanoid
-            specBtn.Text = "UNSPECTATE"
-            specBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            specBtn.Text = "UNSPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
         end
     else
-        if player.Character then
-            workspace.CurrentCamera.CameraSubject = player.Character.Humanoid
-        end
-        specBtn.Text = "SPECTATE"
-        specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+        if player.Character then workspace.CurrentCamera.CameraSubject = player.Character.Humanoid end
+        specBtn.Text = "SPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
     end
 end)
 
 mouse.Button1Down:Connect(function()
-    if _G.ClickTPEnabled and mouse.Target and player.Character then
-        player.Character:MoveTo(mouse.Hit.p)
-    end
+    if _G.ClickTPEnabled and mouse.Target and player.Character then player.Character:MoveTo(mouse.Hit.p) end
 end)
 
--- 10. WALK & JUMP LOGIC
+-- 10. PAGE DESYNC (NOUVEAU - AJOUTÉ)
+local function addDesyncButton(text, url)
+    local b = Instance.new("TextButton", desyncPage)
+    b.Size = UDim2.new(1, -5, 0, 35)
+    b.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    b.Text = "  " .. text
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 12
+    b.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+    b.MouseButton1Click:Connect(function()
+        pcall(function() loadstring(game:HttpGet(url))() end)
+    end)
+end
+
+addDesyncButton("Desync Delta", "https://pastebin.com/raw/shxUprTU")
+addDesyncButton("Desync PC", "https://pastebin.com/raw/GwTfyFwL")
+
+-- 11. WALK & JUMP LOGIC
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
         hum.WalkSpeed = _G.SprintEnabled and _G.WalkSpeedValue or 16
         if _G.JumpEnabled then
-            hum.UseJumpPower = true
-            hum.JumpPower = _G.JumpPowerValue
+            hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue
         else
             hum.JumpPower = 50
         end
     end
 end)
 
--- 11. NAVIGATION DES ONGLETS
+-- 12. NAVIGATION DES ONGLETS
 local function addTab(name, y, page)
     local b = Instance.new("TextButton", nav)
     b.Size = UDim2.new(1, -10, 0, 35)
@@ -472,14 +460,15 @@ local function addTab(name, y, page)
     b.Font = Enum.Font.GothamBold
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     b.MouseButton1Click:Connect(function()
-        playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false
+        playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; desyncPage.Visible = false
         page.Visible = true
     end)
 end
 
 addTab("PLAYER", 0, playerPage)
-addTab("ESP", 45, espPage)
-addTab("TELEPORT", 90, tpPage)
+addTab("ESP", 40, espPage)
+addTab("TELEPORT", 80, tpPage)
+addTab("DESYNC", 120, desyncPage) -- Ajout de l'onglet dans la navigation
 
 local active = false
 openBtn.MouseButton1Click:Connect(function()
