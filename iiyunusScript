@@ -3,7 +3,11 @@ local pGui = player:WaitForChild("PlayerGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local mouse = player:GetMouse()
+
+-- SAUVEGARDE DE LA LOGIQUE INITIALE DU JEU
+local originalMaxZoom = player.CameraMaxZoomDistance
 
 -- SETTINGS GLOBAUX
 _G.ESP_ALL_ENABLED = false
@@ -13,6 +17,8 @@ _G.JumpPowerValue = 50
 _G.SprintEnabled = false
 _G.JumpEnabled = false
 _G.ClickTPEnabled = false
+_G.InfZoomEnabled = false
+_G.NoclipCamEnabled = false
 
 -- 1. CRÉATION DU GUI DE BASE
 local screenGui = Instance.new("ScreenGui")
@@ -22,26 +28,26 @@ screenGui.Parent = pGui
 
 -- FONCTION DRAG
 local function makeDraggable(guiElement)
-	local dragging, dragInput, dragStart, startPos
-	guiElement.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true; dragStart = input.Position; startPos = guiElement.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then dragging = false end
-			end)
-		end
-	end)
-	guiElement.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input == dragInput then
-			local delta = input.Position - dragStart
-			guiElement.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-		end
-	end)
+    local dragging, dragInput, dragStart, startPos
+    guiElement.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = guiElement.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    guiElement.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - dragStart
+            guiElement.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
 end
 
 -- 2. BOUTON D'OUVERTURE
@@ -72,10 +78,10 @@ makeDraggable(mainPanel)
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 50)
 header.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-header.Text = "    iiyunus | Script"
+header.Text = "     iiyunus | Script"
 header.TextColor3 = Color3.new(1, 1, 1)
 header.Font = Enum.Font.GothamBold
-header.TextSize = 13
+header.TextSize = 20
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.Parent = mainPanel
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 15)
@@ -108,7 +114,9 @@ end
 local playerPage = createPage()
 local espPage = createPage()
 local tpPage = createPage()
-local desyncPage = createPage() -- Ajout de la page
+local desyncPage = createPage()
+local visualPage = createPage()
+local translatorPage = createPage()
 
 -- 5. COMPOSANTS RÉUTILISABLES
 local function createValueSetting(parent, labelText, defaultValue, callbackValue)
@@ -161,6 +169,86 @@ local function addToggle(parent, text, callback)
     end)
 end
 
+-- --- SECTION TRADUCTEUR (LOGIQUE) --- --
+
+local clearBtn = Instance.new("TextButton", translatorPage)
+clearBtn.Size = UDim2.new(1, -5, 0, 25)
+clearBtn.BackgroundColor3 = Color3.fromRGB(130, 40, 40)
+clearBtn.Text = "EFFACER L'HISTORIQUE"
+clearBtn.TextColor3 = Color3.new(1, 1, 1)
+clearBtn.Font = Enum.Font.GothamBold
+clearBtn.TextSize = 10
+Instance.new("UICorner", clearBtn)
+
+local chatFrame = Instance.new("ScrollingFrame", translatorPage)
+chatFrame.Size = UDim2.new(1, 0, 1, -35)
+chatFrame.Position = UDim2.new(0, 0, 0, 35)
+chatFrame.BackgroundTransparency = 1
+chatFrame.ScrollBarThickness = 2
+chatFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+chatFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local chatLayout = Instance.new("UIListLayout", chatFrame)
+chatLayout.Padding = UDim.new(0, 5)
+chatLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function translate(text)
+    local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fr&dt=t&q=" .. HttpService:UrlEncode(text)
+    local success, result = pcall(function() return game:HttpGet(url) end)
+    if success then
+        local decoded = HttpService:JSONDecode(result)
+        return decoded[1][1][1]
+    end
+    return nil
+end
+
+local function addMessage(sender, original, translated)
+    local msgFrame = Instance.new("Frame", chatFrame)
+    msgFrame.Size = UDim2.new(1, -10, 0, 0)
+    msgFrame.AutomaticSize = Enum.AutomaticSize.Y
+    msgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Instance.new("UICorner", msgFrame).CornerRadius = UDim.new(0, 6)
+    
+    local txt = Instance.new("TextLabel", msgFrame)
+    txt.Size = UDim2.new(1, -10, 0, 0)
+    txt.AutomaticSize = Enum.AutomaticSize.Y
+    txt.Position = UDim2.new(0, 5, 0, 5)
+    txt.BackgroundTransparency = 1
+    txt.Font = Enum.Font.Gotham
+    txt.TextSize = 12
+    txt.TextColor3 = Color3.new(1, 1, 1)
+    txt.TextWrapped = true
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.RichText = true
+    
+    if translated and translated:lower() ~= original:lower() then
+        txt.Text = "<b>" .. sender .. "</b>: " .. translated .. " <font color='#888888' size='10'>[" .. original .. "]</font>"
+    else
+        txt.Text = "<b>" .. sender .. "</b>: " .. original
+    end
+
+    task.wait(0.05)
+    chatFrame.CanvasPosition = Vector2.new(0, chatFrame.AbsoluteContentSize.Y)
+end
+
+clearBtn.MouseButton1Click:Connect(function()
+    for _, item in pairs(chatFrame:GetChildren()) do
+        if item:IsA("Frame") then item:Destroy() end
+    end
+end)
+
+local function setupChatTranslation(targetPlr)
+    targetPlr.Chatted:Connect(function(msg)
+        task.spawn(function()
+            local result = translate(msg)
+            addMessage(targetPlr.Name, msg, result)
+        end)
+    end)
+end
+
+for _, p in pairs(game.Players:GetPlayers()) do setupChatTranslation(p) end
+game.Players.PlayerAdded:Connect(setupChatTranslation)
+
 -- 6. PLAYER PAGE
 createValueSetting(playerPage, "WalkSpeed Value", _G.WalkSpeedValue, function(val) _G.WalkSpeedValue = val end)
 addToggle(playerPage, "Toggle Sprint", function() _G.SprintEnabled = not _G.SprintEnabled return _G.SprintEnabled end)
@@ -179,49 +267,66 @@ flyBtn.MouseButton1Click:Connect(function()
     pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end)
 end)
 
--- 7. LOGIQUE ESP (TON CODE ORIGINAL)
-local function getESPColor(targetPlr)
-    if targetPlr.Team ~= nil and player.Team ~= nil then
-        return (targetPlr.Team == player.Team) and Color3.new(0, 0, 1) or Color3.new(1, 0, 0)
-    end
-    return Color3.new(1, 1, 1)
-end
-
+-- 7. LOGIQUE ESP FINALISÉE
 local function applyPlayerESP(targetPlr)
     if targetPlr == player then return end
     local function setup(char)
         local hum = char:WaitForChild("Humanoid")
         local hrp = char:WaitForChild("HumanoidRootPart")
+        
         local highlight = Instance.new("Highlight", char)
         highlight.FillTransparency = 0.5
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         
         local bgui = Instance.new("BillboardGui", char)
-        bgui.Size = UDim2.new(0, 150, 0, 50)
-        bgui.StudsOffset = Vector3.new(0, 3.5, 0)
+        bgui.Size = UDim2.new(0, 150, 0, 90)
+        bgui.StudsOffset = Vector3.new(0, 4.5, 0)
         bgui.AlwaysOnTop = true
         
+        local friendLabel = Instance.new("TextLabel", bgui)
+        friendLabel.Size = UDim2.new(1, 0, 0.15, 0)
+        friendLabel.BackgroundTransparency = 1
+        friendLabel.TextColor3 = Color3.new(0, 1, 0)
+        friendLabel.Font = Enum.Font.GothamBold
+        friendLabel.TextSize = 10
+        friendLabel.Text = "FRIEND"
+        friendLabel.Visible = false
+
         local nameLabel = Instance.new("TextLabel", bgui)
-        nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0.15, 0)
         nameLabel.BackgroundTransparency = 1
-        nameLabel.TextColor3 = Color3.new(1, 1, 1)
         nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.TextSize = 14
+        nameLabel.TextSize = 13
+
+        local roleLabel = Instance.new("TextLabel", bgui)
+        roleLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        roleLabel.Position = UDim2.new(0, 0, 0.45, 0)
+        roleLabel.BackgroundTransparency = 1
+        roleLabel.Font = Enum.Font.GothamBold
+        roleLabel.TextSize = 11
 
         local infoLabel = Instance.new("TextLabel", bgui)
-        infoLabel.Size = UDim2.new(1, 0, 0.4, 0)
-        infoLabel.Position = UDim2.new(0, 0, 0.45, 0)
+        infoLabel.Size = UDim2.new(1, 0, 0.25, 0)
+        infoLabel.Position = UDim2.new(0, 0, 0.7, 0)
         infoLabel.BackgroundTransparency = 1
         infoLabel.TextColor3 = Color3.new(1, 1, 1)
-        infoLabel.Font = Enum.Font.GothamSemibold
-        infoLabel.TextSize = 12
+        infoLabel.Font = Enum.Font.GothamBold
+        infoLabel.TextSize = 11
 
         RS.RenderStepped:Connect(function()
             if _G.ESP_ALL_ENABLED and char.Parent and hrp.Parent then
-                local color = getESPColor(targetPlr)
-                highlight.Enabled, highlight.OutlineColor, highlight.FillColor = true, color, color
+                local teamColor = targetPlr.TeamColor.Color
+                highlight.Enabled, highlight.OutlineColor, highlight.FillColor = true, teamColor, teamColor
+                
+                friendLabel.Visible = player:IsFriendsWith(targetPlr.UserId)
                 nameLabel.Text = targetPlr.Name
-                nameLabel.TextColor3 = color
+                nameLabel.TextColor3 = teamColor
+                
+                -- Rôle fixe : Neutral si pas de team
+                roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"
+                roleLabel.TextColor3 = teamColor
+                
                 local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
                 infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
                 bgui.Enabled = true
@@ -234,19 +339,14 @@ local function applyPlayerESP(targetPlr)
     if targetPlr.Character then setup(targetPlr.Character) end
 end
 
+-- LOGIQUE BOT ESP
 local function applyBotESP(model)
     local hum = model:FindFirstChildOfClass("Humanoid")
     local hrp = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
     if not hum or not hrp then return end
-    local name = model.Name:lower()
-    local ignoreNames = {"merchant", "shop", "magasin", "quest", "vendeur", "dealer", "job", "dummy"}
-    for _, word in pairs(ignoreNames) do if name:find(word) then return end end
-    if hrp.Anchored and hum.MaxHealth > 100000 then return end
     local color = Color3.new(1, 0.8, 0)
     local highlight = Instance.new("Highlight", model)
     highlight.FillTransparency = 0.6
-    highlight.OutlineColor = color
-    highlight.FillColor = color
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     local bgui = Instance.new("BillboardGui", hrp)
     bgui.Size = UDim2.new(0, 150, 0, 50)
@@ -282,12 +382,6 @@ local function applyBotESP(model)
 end
 
 local function scanForBots()
-    workspace.DescendantAdded:Connect(function(obj)
-        if obj:IsA("Humanoid") then
-            task.wait(0.5)
-            if not game.Players:GetPlayerFromCharacter(obj.Parent) then applyBotESP(obj.Parent) end
-        end
-    end)
     for _, v in pairs(workspace:GetDescendants()) do
         if v:IsA("Humanoid") and not game.Players:GetPlayerFromCharacter(v.Parent) then applyBotESP(v.Parent) end
     end
@@ -301,7 +395,7 @@ scanForBots()
 addToggle(espPage, "ESP Player", function() _G.ESP_ALL_ENABLED = not _G.ESP_ALL_ENABLED return _G.ESP_ALL_ENABLED end)
 addToggle(espPage, "ESP Bot / NPC", function() _G.ESP_BOTS_ENABLED = not _G.ESP_BOTS_ENABLED return _G.ESP_BOTS_ENABLED end)
 
--- 9. TELEPORT PAGE (TON CODE ORIGINAL)
+-- 9. TELEPORT PAGE
 local tpHeaderFrame = Instance.new("Frame", tpPage)
 tpHeaderFrame.Size = UDim2.new(1, 0, 0, 25)
 tpHeaderFrame.BackgroundTransparency = 1
@@ -416,7 +510,7 @@ mouse.Button1Down:Connect(function()
     if _G.ClickTPEnabled and mouse.Target and player.Character then player.Character:MoveTo(mouse.Hit.p) end
 end)
 
--- 10. PAGE DESYNC (NOUVEAU - AJOUTÉ)
+-- 10. PAGE DESYNC
 local function addDesyncButton(text, url)
     local b = Instance.new("TextButton", desyncPage)
     b.Size = UDim2.new(1, -5, 0, 35)
@@ -435,11 +529,34 @@ end
 addDesyncButton("Desync Delta", "https://pastebin.com/raw/shxUprTU")
 addDesyncButton("Desync PC", "https://pastebin.com/raw/GwTfyFwL")
 
--- 11. WALK & JUMP LOGIC
+-- 10.5 PAGE VISUEL (INFINITE ZOOM FIXÉ)
+addToggle(visualPage, "Infinite Zoom", function()
+    _G.InfZoomEnabled = not _G.InfZoomEnabled
+    if _G.InfZoomEnabled then
+        player.CameraMaxZoomDistance = 10000
+    else
+        player.CameraMaxZoomDistance = originalMaxZoom
+    end
+    return _G.InfZoomEnabled
+end)
+
+addToggle(visualPage, "Noclip Camera", function()
+    _G.NoclipCamEnabled = not _G.NoclipCamEnabled
+    if _G.NoclipCamEnabled then
+        player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+    else
+        player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+    end
+    return _G.NoclipCamEnabled
+end)
+
+-- 11. WALK & JUMP LOGIC (CORRECTION VITESSE LOGIQUE JEU)
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
-        hum.WalkSpeed = _G.SprintEnabled and _G.WalkSpeedValue or 16
+        if _G.SprintEnabled then
+             hum.WalkSpeed = _G.WalkSpeedValue
+        end
         if _G.JumpEnabled then
             hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue
         else
@@ -460,15 +577,18 @@ local function addTab(name, y, page)
     b.Font = Enum.Font.GothamBold
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     b.MouseButton1Click:Connect(function()
-        playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; desyncPage.Visible = false
+        playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; 
+        desyncPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false
         page.Visible = true
     end)
 end
 
 addTab("PLAYER", 0, playerPage)
 addTab("ESP", 40, espPage)
-addTab("TELEPORT", 80, tpPage)
-addTab("DESYNC", 120, desyncPage) -- Ajout de l'onglet dans la navigation
+addTab("TELEPORT", 120, tpPage)
+addTab("DESYNC", 160, desyncPage)
+addTab("VISUEL", 80, visualPage)
+addTab("TRADUCTION", 200, translatorPage)
 
 local active = false
 openBtn.MouseButton1Click:Connect(function()
