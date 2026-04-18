@@ -20,6 +20,15 @@ _G.ClickTPEnabled = false
 _G.InfZoomEnabled = false
 _G.NoclipCamEnabled = false
 
+-- CONFIG ANTI-RING (10K / Adaptative)
+local arConfig = {
+    enabled = false,
+    distance = 10000,
+    baseForce = 100,
+    maxForce = 5000,
+    currentForce = 100
+}
+
 -- 1. CRÉATION DU GUI DE BASE
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "iiyunus_Pro_FinalFix"
@@ -78,7 +87,7 @@ makeDraggable(mainPanel)
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 50)
 header.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-header.Text = "       iiyunus | Script"
+header.Text = "        iiyunus | Script"
 header.TextColor3 = Color3.new(1, 1, 1)
 header.Font = Enum.Font.GothamBold
 header.TextSize = 20
@@ -115,7 +124,7 @@ local playerPage = createPage()
 local espPage = createPage()
 local tpPage = createPage()
 local desyncPage = createPage()
-local ringPage = createPage() -- Nouvelle page Ring
+local ringPage = createPage() 
 local visualPage = createPage()
 local translatorPage = createPage()
 
@@ -170,6 +179,34 @@ local function addToggle(parent, text, callback)
     end)
 end
 
+-- --- LOGIQUE ANTI-RING ---
+RS.Heartbeat:Connect(function()
+    if not arConfig.enabled then return end
+    sethiddenproperty(player, "SimulationRadius", math.huge)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local found = false
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") and not v.Anchored and not v:IsDescendantOf(char) then
+            if not v.Parent:FindFirstChild("Humanoid") then
+                local dist = (v.Position - root.Position).Magnitude
+                if dist <= arConfig.distance then
+                    found = true
+                    local dir = (v.Position - root.Position).Unit
+                    v.Velocity = (dir + Vector3.new(0, 0.1, 0)) * arConfig.currentForce
+                    v.RotVelocity = Vector3.new(15, 15, 15)
+                end
+            end
+        end
+    end
+    if found then
+        if arConfig.currentForce < arConfig.maxForce then arConfig.currentForce = arConfig.currentForce + 25 end
+    else
+        arConfig.currentForce = arConfig.baseForce
+    end
+end)
+
 -- --- SECTION TRADUCTEUR ---
 local clearBtn = Instance.new("TextButton", translatorPage)
 clearBtn.Size = UDim2.new(1, -5, 0, 25)
@@ -208,7 +245,6 @@ local function addMessage(sender, original, translated)
     msgFrame.AutomaticSize = Enum.AutomaticSize.Y
     msgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     Instance.new("UICorner", msgFrame).CornerRadius = UDim.new(0, 6)
-    
     local txt = Instance.new("TextLabel", msgFrame)
     txt.Size = UDim2.new(1, -10, 0, 0)
     txt.AutomaticSize = Enum.AutomaticSize.Y
@@ -220,13 +256,11 @@ local function addMessage(sender, original, translated)
     txt.TextWrapped = true
     txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.RichText = true
-    
     if translated and translated:lower() ~= original:lower() then
         txt.Text = "<b>" .. sender .. "</b>: " .. translated .. " <font color='#888888' size='10'>[" .. original .. "]</font>"
     else
         txt.Text = "<b>" .. sender .. "</b>: " .. original
     end
-
     task.wait(0.05)
     chatFrame.CanvasPosition = Vector2.new(0, chatFrame.AbsoluteContentSize.Y)
 end
@@ -273,16 +307,13 @@ local function applyPlayerESP(targetPlr)
     local function setup(char)
         local hum = char:WaitForChild("Humanoid")
         local hrp = char:WaitForChild("HumanoidRootPart")
-        
         local highlight = Instance.new("Highlight", char)
         highlight.FillTransparency = 0.5
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        
         local bgui = Instance.new("BillboardGui", char)
         bgui.Size = UDim2.new(0, 150, 0, 90)
         bgui.StudsOffset = Vector3.new(0, 4.5, 0)
         bgui.AlwaysOnTop = true
-        
         local friendLabel = Instance.new("TextLabel", bgui)
         friendLabel.Size = UDim2.new(1, 0, 0.15, 0)
         friendLabel.BackgroundTransparency = 1
@@ -291,21 +322,18 @@ local function applyPlayerESP(targetPlr)
         friendLabel.TextSize = 10
         friendLabel.Text = "FRIEND"
         friendLabel.Visible = false
-
         local nameLabel = Instance.new("TextLabel", bgui)
         nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
         nameLabel.Position = UDim2.new(0, 0, 0.15, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.TextSize = 13
-
         local roleLabel = Instance.new("TextLabel", bgui)
         roleLabel.Size = UDim2.new(1, 0, 0.25, 0)
         roleLabel.Position = UDim2.new(0, 0, 0.45, 0)
         roleLabel.BackgroundTransparency = 1
         roleLabel.Font = Enum.Font.GothamBold
         roleLabel.TextSize = 11
-
         local infoLabel = Instance.new("TextLabel", bgui)
         infoLabel.Size = UDim2.new(1, 0, 0.25, 0)
         infoLabel.Position = UDim2.new(0, 0, 0.7, 0)
@@ -313,19 +341,15 @@ local function applyPlayerESP(targetPlr)
         infoLabel.TextColor3 = Color3.new(1, 1, 1)
         infoLabel.Font = Enum.Font.GothamBold
         infoLabel.TextSize = 11
-
         RS.RenderStepped:Connect(function()
             if _G.ESP_ALL_ENABLED and char.Parent and hrp.Parent then
                 local teamColor = targetPlr.TeamColor.Color
                 highlight.Enabled, highlight.OutlineColor, highlight.FillColor = true, teamColor, teamColor
-                
                 friendLabel.Visible = player:IsFriendsWith(targetPlr.UserId)
                 nameLabel.Text = targetPlr.Name
                 nameLabel.TextColor3 = teamColor
-                
                 roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"
                 roleLabel.TextColor3 = teamColor
-                
                 local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
                 infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
                 bgui.Enabled = true
@@ -527,9 +551,14 @@ end
 createLoadBtn(desyncPage, "Desync Delta", "https://pastebin.com/raw/shxUprTU")
 createLoadBtn(desyncPage, "Desync PC", "https://pastebin.com/raw/GwTfyFwL")
 
--- --- 10.6 NOUVELLE PAGE RING ---
+-- --- 10.6 PAGE RING ---
 createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/FTFZnzav")
 createLoadBtn(ringPage, "Ring For People", "https://pastebin.com/raw/MY0XEKuK")
+addToggle(ringPage, "Anti-Ring", function()
+    arConfig.enabled = not arConfig.enabled
+    if not arConfig.enabled then arConfig.currentForce = arConfig.baseForce end
+    return arConfig.enabled
+end)
 
 -- 10.5 PAGE VISUEL
 addToggle(visualPage, "Infinite Zoom", function()
@@ -556,9 +585,7 @@ end)
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
-        if _G.SprintEnabled then
-            hum.WalkSpeed = _G.WalkSpeedValue
-        end
+        if _G.SprintEnabled then hum.WalkSpeed = _G.WalkSpeedValue end
         if _G.JumpEnabled then
             hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue
         else
@@ -591,7 +618,7 @@ addTab("VISUEL", 80, visualPage)
 addTab("TELEPORT", 120, tpPage)
 addTab("DESYNC", 160, desyncPage)
 addTab("TRADUCTION", 200, translatorPage)
-addTab("RING", 240, ringPage) -- Ajout de l'onglet Ring ici
+addTab("RING", 240, ringPage) 
 
 local active = false
 openBtn.MouseButton1Click:Connect(function()
