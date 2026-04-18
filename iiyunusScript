@@ -78,7 +78,7 @@ makeDraggable(mainPanel)
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 50)
 header.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-header.Text = "     iiyunus | Script"
+header.Text = "       iiyunus | Script"
 header.TextColor3 = Color3.new(1, 1, 1)
 header.Font = Enum.Font.GothamBold
 header.TextSize = 20
@@ -115,6 +115,7 @@ local playerPage = createPage()
 local espPage = createPage()
 local tpPage = createPage()
 local desyncPage = createPage()
+local ringPage = createPage() -- Nouvelle page Ring
 local visualPage = createPage()
 local translatorPage = createPage()
 
@@ -169,8 +170,7 @@ local function addToggle(parent, text, callback)
     end)
 end
 
--- --- SECTION TRADUCTEUR (LOGIQUE) --- --
-
+-- --- SECTION TRADUCTEUR ---
 local clearBtn = Instance.new("TextButton", translatorPage)
 clearBtn.Size = UDim2.new(1, -5, 0, 25)
 clearBtn.BackgroundColor3 = Color3.fromRGB(130, 40, 40)
@@ -267,7 +267,7 @@ flyBtn.MouseButton1Click:Connect(function()
     pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end)
 end)
 
--- 7. LOGIQUE ESP FINALISÉE
+-- 7. ESP PAGE LOGIC
 local function applyPlayerESP(targetPlr)
     if targetPlr == player then return end
     local function setup(char)
@@ -323,7 +323,6 @@ local function applyPlayerESP(targetPlr)
                 nameLabel.Text = targetPlr.Name
                 nameLabel.TextColor3 = teamColor
                 
-                -- Rôle fixe : Neutral si pas de team
                 roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"
                 roleLabel.TextColor3 = teamColor
                 
@@ -339,7 +338,6 @@ local function applyPlayerESP(targetPlr)
     if targetPlr.Character then setup(targetPlr.Character) end
 end
 
--- LOGIQUE BOT ESP
 local function applyBotESP(model)
     local hum = model:FindFirstChildOfClass("Humanoid")
     local hrp = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
@@ -391,7 +389,7 @@ for _, p in pairs(game.Players:GetPlayers()) do applyPlayerESP(p) end
 game.Players.PlayerAdded:Connect(applyPlayerESP)
 scanForBots()
 
--- 8. ESP PAGE
+-- 8. ESP PAGE UI
 addToggle(espPage, "ESP Player", function() _G.ESP_ALL_ENABLED = not _G.ESP_ALL_ENABLED return _G.ESP_ALL_ENABLED end)
 addToggle(espPage, "ESP Bot / NPC", function() _G.ESP_BOTS_ENABLED = not _G.ESP_BOTS_ENABLED return _G.ESP_BOTS_ENABLED end)
 
@@ -511,8 +509,8 @@ mouse.Button1Down:Connect(function()
 end)
 
 -- 10. PAGE DESYNC
-local function addDesyncButton(text, url)
-    local b = Instance.new("TextButton", desyncPage)
+local function createLoadBtn(parent, text, url)
+    local b = Instance.new("TextButton", parent)
     b.Size = UDim2.new(1, -5, 0, 35)
     b.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     b.Text = "  " .. text
@@ -526,10 +524,14 @@ local function addDesyncButton(text, url)
     end)
 end
 
-addDesyncButton("Desync Delta", "https://pastebin.com/raw/shxUprTU")
-addDesyncButton("Desync PC", "https://pastebin.com/raw/GwTfyFwL")
+createLoadBtn(desyncPage, "Desync Delta", "https://pastebin.com/raw/shxUprTU")
+createLoadBtn(desyncPage, "Desync PC", "https://pastebin.com/raw/GwTfyFwL")
 
--- 10.5 PAGE VISUEL (INFINITE ZOOM FIXÉ)
+-- --- 10.6 NOUVELLE PAGE RING ---
+createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/FTFZnzav")
+createLoadBtn(ringPage, "Ring For People", "https://pastebin.com/raw/MY0XEKuK")
+
+-- 10.5 PAGE VISUEL
 addToggle(visualPage, "Infinite Zoom", function()
     _G.InfZoomEnabled = not _G.InfZoomEnabled
     if _G.InfZoomEnabled then
@@ -550,12 +552,12 @@ addToggle(visualPage, "Noclip Camera", function()
     return _G.NoclipCamEnabled
 end)
 
--- 11. WALK & JUMP LOGIC (CORRECTION VITESSE LOGIQUE JEU)
+-- 11. WALK & JUMP LOGIC
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
         if _G.SprintEnabled then
-             hum.WalkSpeed = _G.WalkSpeedValue
+            hum.WalkSpeed = _G.WalkSpeedValue
         end
         if _G.JumpEnabled then
             hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue
@@ -578,17 +580,18 @@ local function addTab(name, y, page)
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     b.MouseButton1Click:Connect(function()
         playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; 
-        desyncPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false
+        desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false
         page.Visible = true
     end)
 end
 
 addTab("PLAYER", 0, playerPage)
 addTab("ESP", 40, espPage)
+addTab("VISUEL", 80, visualPage)
 addTab("TELEPORT", 120, tpPage)
 addTab("DESYNC", 160, desyncPage)
-addTab("VISUEL", 80, visualPage)
 addTab("TRADUCTION", 200, translatorPage)
+addTab("RING", 240, ringPage) -- Ajout de l'onglet Ring ici
 
 local active = false
 openBtn.MouseButton1Click:Connect(function()
