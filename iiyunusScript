@@ -19,11 +19,13 @@ _G.JumpEnabled = false
 _G.ClickTPEnabled = false
 _G.InfZoomEnabled = false
 _G.NoclipCamEnabled = false
+_G.FloatEnabled = false 
+local floatHeight = 0 
 
--- CONFIG ANTI-RING (10K / Adaptative)
+-- CONFIG ANTI-RING
 local arConfig = {
     enabled = false,
-    distance = 10000,
+    distance = 1000,
     baseForce = 100,
     maxForce = 5000,
     currentForce = 100
@@ -87,7 +89,7 @@ makeDraggable(mainPanel)
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 50)
 header.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-header.Text = "        iiyunus | Script"
+header.Text = "         iiyunus | Script"
 header.TextColor3 = Color3.new(1, 1, 1)
 header.Font = Enum.Font.GothamBold
 header.TextSize = 20
@@ -95,11 +97,15 @@ header.TextXAlignment = Enum.TextXAlignment.Left
 header.Parent = mainPanel
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 15)
 
--- 4. NAVIGATION & PAGES
-local nav = Instance.new("Frame")
+-- 4. NAVIGATION GLISSANTE (MODIFIÉ)
+local nav = Instance.new("ScrollingFrame")
 nav.Size = UDim2.new(0, 140, 1, -60)
 nav.Position = UDim2.new(0, 5, 0, 55)
 nav.BackgroundTransparency = 1
+nav.BorderSizePixel = 0
+nav.ScrollBarThickness = 2
+nav.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+nav.CanvasSize = UDim2.new(0, 0, 0, 350) -- Permet de défiler si trop d'onglets
 nav.Parent = mainPanel
 
 local container = Instance.new("Frame")
@@ -127,6 +133,7 @@ local desyncPage = createPage()
 local ringPage = createPage() 
 local visualPage = createPage()
 local translatorPage = createPage()
+local emotePage = createPage()
 
 -- 5. COMPOSANTS RÉUTILISABLES
 local function createValueSetting(parent, labelText, defaultValue, callbackValue)
@@ -182,7 +189,7 @@ end
 -- --- LOGIQUE ANTI-RING ---
 RS.Heartbeat:Connect(function()
     if not arConfig.enabled then return end
-    sethiddenproperty(player, "SimulationRadius", math.huge)
+    pcall(function() sethiddenproperty(player, "SimulationRadius", math.huge) end)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
@@ -289,6 +296,14 @@ addToggle(playerPage, "Toggle Sprint", function() _G.SprintEnabled = not _G.Spri
 createValueSetting(playerPage, "JumpPower Value", _G.JumpPowerValue, function(val) _G.JumpPowerValue = val end)
 addToggle(playerPage, "Toggle Jump", function() _G.JumpEnabled = not _G.JumpEnabled return _G.JumpEnabled end)
 
+addToggle(playerPage, "Float (Plateforme invisible)", function()
+    _G.FloatEnabled = not _G.FloatEnabled
+    if _G.FloatEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        floatHeight = player.Character.HumanoidRootPart.Position.Y - 3.5
+    end
+    return _G.FloatEnabled
+end)
+
 local flyBtn = Instance.new("TextButton", playerPage)
 flyBtn.Size = UDim2.new(1, -5, 0, 35)
 flyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
@@ -301,7 +316,7 @@ flyBtn.MouseButton1Click:Connect(function()
     pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end)
 end)
 
--- 7. ESP PAGE LOGIC
+-- 7. ESP PAGE
 local function applyPlayerESP(targetPlr)
     if targetPlr == player then return end
     local function setup(char)
@@ -338,7 +353,7 @@ local function applyPlayerESP(targetPlr)
         infoLabel.Size = UDim2.new(1, 0, 0.25, 0)
         infoLabel.Position = UDim2.new(0, 0, 0.7, 0)
         infoLabel.BackgroundTransparency = 1
-        infoLabel.TextColor3 = Color3.new(1, 1, 1)
+        infoLabel.TextColor3 = Color3.new(0, 0, 0) 
         infoLabel.Font = Enum.Font.GothamBold
         infoLabel.TextSize = 11
         RS.RenderStepped:Connect(function()
@@ -385,7 +400,7 @@ local function applyBotESP(model)
     infoLabel.Size = UDim2.new(1, 0, 0.4, 0)
     infoLabel.Position = UDim2.new(0, 0, 0.45, 0)
     infoLabel.BackgroundTransparency = 1
-    infoLabel.TextColor3 = color
+    infoLabel.TextColor3 = Color3.new(0, 0, 0)
     infoLabel.Font = Enum.Font.GothamSemibold
     infoLabel.TextSize = 12
     local conn
@@ -551,16 +566,16 @@ end
 createLoadBtn(desyncPage, "Desync Delta", "https://pastebin.com/raw/shxUprTU")
 createLoadBtn(desyncPage, "Desync PC", "https://pastebin.com/raw/GwTfyFwL")
 
--- --- 10.6 PAGE RING ---
-createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/FTFZnzav")
-createLoadBtn(ringPage, "Ring For People", "https://pastebin.com/raw/MY0XEKuK")
+-- --- PAGE RING ---
+createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/gFTnZsFf")
+createLoadBtn(ringPage, "Ring For People", "https://pastebin.com/raw/PRaNX1ZK")
 addToggle(ringPage, "Anti-Ring", function()
     arConfig.enabled = not arConfig.enabled
     if not arConfig.enabled then arConfig.currentForce = arConfig.baseForce end
     return arConfig.enabled
 end)
 
--- 10.5 PAGE VISUEL
+-- PAGE VISUEL
 addToggle(visualPage, "Infinite Zoom", function()
     _G.InfZoomEnabled = not _G.InfZoomEnabled
     if _G.InfZoomEnabled then
@@ -581,15 +596,44 @@ addToggle(visualPage, "Noclip Camera", function()
     return _G.NoclipCamEnabled
 end)
 
--- 11. WALK & JUMP LOGIC
+-- --- PAGE EMOTE (MODIFIÉ : BOUTON COMME LE FLY) ---
+local loadEmoteScript = Instance.new("TextButton", emotePage)
+loadEmoteScript.Size = UDim2.new(1, -5, 0, 35) -- Taille identique au Fly
+loadEmoteScript.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Couleur identique au Fly
+loadEmoteScript.Text = "EMOTE GUI"
+loadEmoteScript.TextColor3 = Color3.new(1, 1, 1)
+loadEmoteScript.Font = Enum.Font.GothamBold
+loadEmoteScript.TextSize = 12
+Instance.new("UICorner", loadEmoteScript).CornerRadius = UDim.new(0, 4)
+loadEmoteScript.MouseButton1Click:Connect(function()
+    pcall(function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Emote-Gui-75782"))() end)
+end)
+
+-- 11. WALK & JUMP LOGIC + FLOAT LOGIC
+local floatPart = Instance.new("Part")
+floatPart.Name = "iiyunus_Float"
+floatPart.Transparency = 1
+floatPart.Size = Vector3.new(6, 1, 6)
+floatPart.Anchored = true
+floatPart.CanCollide = true
+
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        
         if _G.SprintEnabled then hum.WalkSpeed = _G.WalkSpeedValue end
         if _G.JumpEnabled then
             hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue
         else
             hum.JumpPower = 50
+        end
+
+        if _G.FloatEnabled and hrp then
+            floatPart.Parent = workspace
+            floatPart.CFrame = CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z)
+        else
+            floatPart.Parent = nil
         end
     end
 end)
@@ -607,18 +651,21 @@ local function addTab(name, y, page)
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     b.MouseButton1Click:Connect(function()
         playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; 
-        desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false
+        desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; 
+        translatorPage.Visible = false; emotePage.Visible = false
         page.Visible = true
     end)
 end
 
+-- Placement des onglets dans la barre défilante
 addTab("PLAYER", 0, playerPage)
 addTab("ESP", 40, espPage)
 addTab("VISUEL", 80, visualPage)
 addTab("TELEPORT", 120, tpPage)
-addTab("DESYNC", 160, desyncPage)
-addTab("TRADUCTION", 200, translatorPage)
-addTab("RING", 240, ringPage) 
+addTab("RING", 160, ringPage) 
+addTab("DESYNC", 200, desyncPage)
+addTab("TRADUCTION", 240, translatorPage)
+addTab("EMOTE", 280, emotePage) 
 
 local active = false
 openBtn.MouseButton1Click:Connect(function()
