@@ -43,7 +43,7 @@ local arConfig = {
     enabled = false,
     distance = 1000,
     baseForce = 100,
-    maxForce = 50000,
+    maxForce = 5000,
     currentForce = 100
 }
 
@@ -574,27 +574,26 @@ addToggle(visualPage, "Noclip Camera", function() _G.NoclipCamEnabled = not _G.N
 -- PAGE EMOTE
 local loadEmoteScript = Instance.new("TextButton", emotePage); loadEmoteScript.Size = UDim2.new(1, -5, 0, 35); loadEmoteScript.BackgroundColor3 = Color3.fromRGB(45, 45, 45); loadEmoteScript.Text = "EMOTE GUI"; loadEmoteScript.TextColor3 = Color3.new(1, 1, 1); loadEmoteScript.Font = Enum.Font.GothamBold; loadEmoteScript.TextSize = 12; Instance.new("UICorner", loadEmoteScript).CornerRadius = UDim.new(0, 4); loadEmoteScript.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Emote-Gui-75782"))() end) end)
 
--- 11. WALK & JUMP LOGIC (AVEC RETOUR À LA NORMALE SI DÉSACTIVÉ) + FLOAT LOGIC
+-- 11. LOGIQUE FINALE (VERSION DISCRÈTE)
 local floatPart = Instance.new("Part"); floatPart.Name = "iiyunus_Float"; floatPart.Transparency = 1; floatPart.Size = Vector3.new(6, 1, 6); floatPart.Anchored = true; floatPart.CanCollide = true
+
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
         local hrp = player.Character:FindFirstChild("HumanoidRootPart")
         
-        -- Stricte logique : activé = custom, désactivé = par défaut (16 et 50)
+        -- On ne change la vitesse QUE si le bouton est activé
         if _G.SprintEnabled then 
             hum.WalkSpeed = _G.WalkSpeedValue 
-        else 
-            hum.WalkSpeed = 16 
         end
         
+        -- On ne change le saut QUE si le bouton est activé
         if _G.JumpEnabled then 
             hum.UseJumpPower = true
             hum.JumpPower = _G.JumpPowerValue 
-        else 
-            hum.JumpPower = 50 
         end
         
+        -- Logique du Float
         if _G.FloatEnabled and hrp then 
             floatPart.Parent = workspace
             floatPart.CFrame = CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z) 
