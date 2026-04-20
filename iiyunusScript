@@ -1,5 +1,20 @@
-local player = game.Players.LocalPlayer
+-- ==========================================
+-- SÉCURITÉ : COOLDOWN ET NETTOYAGE
+-- ==========================================
+task.wait(1) 
+
+local coreGui = game:GetService("CoreGui")
+local players = game:GetService("Players")
+local player = players.LocalPlayer
 local pGui = player:WaitForChild("PlayerGui")
+
+-- Nettoyage pour éviter les doublons
+local old = coreGui:FindFirstChild("iiyunus_Pro_FinalFix") or pGui:FindFirstChild("iiyunus_Pro_FinalFix")
+if old then old:Destroy() end
+
+-- ==========================================
+-- VARIABLES GLOBALES
+-- ==========================================
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
@@ -20,6 +35,7 @@ _G.ClickTPEnabled = false
 _G.InfZoomEnabled = false
 _G.NoclipCamEnabled = false
 _G.FloatEnabled = false 
+_G.AntiFlingEnabled = false
 local floatHeight = 0 
 
 -- CONFIG ANTI-RING
@@ -35,7 +51,8 @@ local arConfig = {
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "iiyunus_Pro_FinalFix"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = pGui
+local success, _ = pcall(function() screenGui.Parent = coreGui end)
+if not success then screenGui.Parent = pGui end
 
 -- FONCTION DRAG
 local function makeDraggable(guiElement)
@@ -89,7 +106,7 @@ makeDraggable(mainPanel)
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 50)
 header.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-header.Text = "         iiyunus | Script"
+header.Text = "          iiyunus | Script"
 header.TextColor3 = Color3.new(1, 1, 1)
 header.Font = Enum.Font.GothamBold
 header.TextSize = 20
@@ -97,15 +114,14 @@ header.TextXAlignment = Enum.TextXAlignment.Left
 header.Parent = mainPanel
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 15)
 
--- 4. NAVIGATION GLISSANTE (MODIFIÉ)
+-- 4. NAVIGATION
 local nav = Instance.new("ScrollingFrame")
 nav.Size = UDim2.new(0, 140, 1, -60)
 nav.Position = UDim2.new(0, 5, 0, 55)
 nav.BackgroundTransparency = 1
 nav.BorderSizePixel = 0
 nav.ScrollBarThickness = 2
-nav.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
-nav.CanvasSize = UDim2.new(0, 0, 0, 350) -- Permet de défiler si trop d'onglets
+nav.CanvasSize = UDim2.new(0, 0, 0, 350)
 nav.Parent = mainPanel
 
 local container = Instance.new("Frame")
@@ -114,6 +130,7 @@ container.Position = UDim2.new(0, 150, 0, 60)
 container.BackgroundTransparency = 1
 container.Parent = mainPanel
 
+-- Création des pages
 local function createPage()
     local p = Instance.new("Frame")
     p.Size = UDim2.new(1, 0, 1, 0)
@@ -126,7 +143,18 @@ local function createPage()
     return p
 end
 
-local playerPage = createPage()
+-- PLAYER PAGE EN SCROLLING FRAME
+local playerPage = Instance.new("ScrollingFrame")
+playerPage.Size = UDim2.new(1, 0, 1, 0)
+playerPage.BackgroundTransparency = 1
+playerPage.ScrollBarThickness = 2
+playerPage.CanvasSize = UDim2.new(0, 0, 0, 400)
+playerPage.Visible = false
+playerPage.Parent = container
+local pLayout = Instance.new("UIListLayout", playerPage)
+pLayout.Padding = UDim.new(0, 10)
+pLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
 local espPage = createPage()
 local tpPage = createPage()
 local desyncPage = createPage()
@@ -136,32 +164,6 @@ local translatorPage = createPage()
 local emotePage = createPage()
 
 -- 5. COMPOSANTS RÉUTILISABLES
-local function createValueSetting(parent, labelText, defaultValue, callbackValue)
-    local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, -5, 0, 35)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 4)
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(0.6, 0, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = labelText
-    lbl.TextColor3 = Color3.new(1, 1, 1)
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 12
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local input = Instance.new("TextBox", frame)
-    input.Size = UDim2.new(0, 60, 0, 25)
-    input.Position = UDim2.new(1, -70, 0.5, -12)
-    input.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    input.Text = tostring(defaultValue)
-    input.TextColor3 = Color3.new(1, 1, 1)
-    input.Font = Enum.Font.Gotham
-    input.TextSize = 12
-    Instance.new("UICorner", input).CornerRadius = UDim.new(0, 4)
-    input.FocusLost:Connect(function() callbackValue(tonumber(input.Text) or defaultValue) end)
-end
-
 local function addToggle(parent, text, callback)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(1, -5, 0, 35)
@@ -185,6 +187,186 @@ local function addToggle(parent, text, callback)
         stroke.Color = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
     end)
 end
+
+-- COMPOSANTS "CÔTE À CÔTE" POUR PLAYER PAGE (TAILLES AGRANDIES)
+local function createHalfArrowSetting(parent, labelText, defaultValue, callbackValue, posScaleX)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(0.48, 0, 1, 0)
+    frame.Position = UDim2.new(posScaleX, 0, 0, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 4)
+    
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1, 0, 0.40, 0)
+    lbl.Position = UDim2.new(0, 0, 0, 4)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.new(1, 1, 1)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 12 -- Taille du texte agrandie
+    
+    local input = Instance.new("TextBox", frame)
+    input.Size = UDim2.new(0, 40, 0, 20) -- TextBox agrandie
+    input.Position = UDim2.new(0.5, -20, 0.5, 4)
+    input.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    input.Text = tostring(defaultValue)
+    input.TextColor3 = Color3.new(1, 1, 1)
+    input.Font = Enum.Font.GothamBold
+    input.TextSize = 12 -- Taille du texte agrandie
+    Instance.new("UICorner", input).CornerRadius = UDim.new(0, 4)
+    
+    local function update(val)
+        local num = tonumber(val) or 0
+        input.Text = tostring(num)
+        callbackValue(num)
+    end
+    
+    local function createBtn(txt, xOffset, delta)
+        local b = Instance.new("TextButton", frame)
+        b.Size = UDim2.new(0, 20, 0, 20) -- Flèches agrandies
+        b.Position = UDim2.new(0.5, xOffset, 0.5, 4)
+        b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        b.Text = txt
+        b.TextColor3 = Color3.new(1, 1, 1)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 12 -- Taille du texte agrandie
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+        local isHolding = false
+        b.MouseButton1Down:Connect(function()
+            isHolding = true; update(tonumber(input.Text) + delta); task.wait(0.5)
+            while isHolding do update(tonumber(input.Text) + delta); task.wait(0.05) end
+        end)
+        b.MouseButton1Up:Connect(function() isHolding = false end)
+        b.MouseLeave:Connect(function() isHolding = false end)
+    end
+    createBtn("<", -45, -1) -- Espacement ajusté pour les grandes flèches
+    createBtn(">", 25, 1)   -- Espacement ajusté pour les grandes flèches
+    
+    input.FocusLost:Connect(function() update(input.Text) end)
+end
+
+local function createHalfToggle(parent, text, callback, posScaleX)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(0.48, 0, 1, 0)
+    btn.Position = UDim2.new(posScaleX, 0, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.Text = "  " .. text
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12 -- Taille du texte agrandie
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    
+    local statusBox = Instance.new("Frame", btn)
+    statusBox.Size = UDim2.new(0, 16, 0, 16) -- Checkbox agrandie
+    statusBox.Position = UDim2.new(1, -22, 0.5, -8)
+    statusBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    Instance.new("UICorner", statusBox).CornerRadius = UDim.new(0, 4)
+    local stroke = Instance.new("UIStroke", statusBox)
+    stroke.Color = Color3.fromRGB(70, 70, 70)
+    
+    btn.MouseButton1Click:Connect(function()
+        local enabled = callback()
+        statusBox.BackgroundColor3 = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(15, 15, 15)
+        stroke.Color = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
+    end)
+end
+
+-- ==========================================
+-- LOGIQUE ANTI-FLING
+-- ==========================================
+local function resetPlayersCollision()
+    pcall(function()
+        for _, v in pairs(players:GetPlayers()) do
+            if v ~= player and v.Character then
+                for _, part in pairs(v.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = true end
+                end
+            end
+        end
+    end)
+end
+
+task.spawn(function()
+    while true do
+        if _G.AntiFlingEnabled then
+            pcall(function()
+                for _, v in pairs(players:GetPlayers()) do
+                    if v ~= player and v.Character then
+                        for _, part in pairs(v.Character:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.CanCollide = false
+                                part.Velocity = Vector3.new(0, 0, 0)
+                                part.RotVelocity = Vector3.new(0, 0, 0)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+        task.wait(0.1)
+    end
+end)
+
+-- ==========================================
+-- REMPLISSAGE PLAYER PAGE (TON DESIGN)
+-- ==========================================
+-- Ligne 1 : Speed Value | Jump Value (Hauteur augmentée pour accommoder les gros boutons)
+local row1 = Instance.new("Frame", playerPage)
+row1.Size = UDim2.new(1, -5, 0, 48) -- 48 au lieu de 38 pour avoir de l'espace
+row1.BackgroundTransparency = 1
+createHalfArrowSetting(row1, "Speed Value", _G.WalkSpeedValue, function(v) _G.WalkSpeedValue = v end, 0)
+createHalfArrowSetting(row1, "Jump Value", _G.JumpPowerValue, function(v) _G.JumpPowerValue = v end, 0.52)
+
+-- Ligne 2 : Toggle Speed | Toggle Jump
+local row2 = Instance.new("Frame", playerPage)
+row2.Size = UDim2.new(1, -5, 0, 35)
+row2.BackgroundTransparency = 1
+createHalfToggle(row2, "Toggle Speed", function() _G.SprintEnabled = not _G.SprintEnabled return _G.SprintEnabled end, 0)
+createHalfToggle(row2, "Toggle Jump", function() _G.JumpEnabled = not _G.JumpEnabled return _G.JumpEnabled end, 0.52)
+
+-- L'ESPACE DE SÉPARATION
+local spacer = Instance.new("Frame", playerPage)
+spacer.Size = UDim2.new(1, 0, 0, 10)
+spacer.BackgroundTransparency = 1
+
+-- Float
+addToggle(playerPage, "Float (Plateforme)", function()
+    _G.FloatEnabled = not _G.FloatEnabled
+    if _G.FloatEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        floatHeight = player.Character.HumanoidRootPart.Position.Y - 3.5
+    end
+    return _G.FloatEnabled
+end)
+
+-- Anti-Fling
+addToggle(playerPage, "Anti-Fling", function() 
+    _G.AntiFlingEnabled = not _G.AntiFlingEnabled 
+    if not _G.AntiFlingEnabled then resetPlayersCollision() end
+    return _G.AntiFlingEnabled 
+end)
+
+-- VFLY
+local vflyBtn = Instance.new("TextButton", playerPage)
+vflyBtn.Size = UDim2.new(1, -5, 0, 35)
+vflyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+vflyBtn.Text = "VFLY"
+vflyBtn.TextColor3 = Color3.new(1, 1, 1)
+vflyBtn.Font = Enum.Font.GothamBold
+vflyBtn.TextSize = 12
+Instance.new("UICorner", vflyBtn).CornerRadius = UDim.new(0, 4)
+vflyBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/waRVejBW"))() end) end)
+
+-- FLY GUI
+local flyGuiBtn = Instance.new("TextButton", playerPage)
+flyGuiBtn.Size = UDim2.new(1, -5, 0, 35)
+flyGuiBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+flyGuiBtn.Text = "FLY GUI"
+flyGuiBtn.TextColor3 = Color3.new(1, 1, 1)
+flyGuiBtn.Font = Enum.Font.GothamBold
+flyGuiBtn.TextSize = 12
+Instance.new("UICorner", flyGuiBtn).CornerRadius = UDim.new(0, 4)
+flyGuiBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end) end)
 
 -- --- LOGIQUE ANTI-RING ---
 RS.Heartbeat:Connect(function()
@@ -216,25 +398,14 @@ end)
 
 -- --- SECTION TRADUCTEUR ---
 local clearBtn = Instance.new("TextButton", translatorPage)
-clearBtn.Size = UDim2.new(1, -5, 0, 25)
-clearBtn.BackgroundColor3 = Color3.fromRGB(130, 40, 40)
-clearBtn.Text = "EFFACER L'HISTORIQUE"
-clearBtn.TextColor3 = Color3.new(1, 1, 1)
-clearBtn.Font = Enum.Font.GothamBold
-clearBtn.TextSize = 10
+clearBtn.Size = UDim2.new(1, -5, 0, 25); clearBtn.BackgroundColor3 = Color3.fromRGB(130, 40, 40)
+clearBtn.Text = "EFFACER L'HISTORIQUE"; clearBtn.TextColor3 = Color3.new(1, 1, 1); clearBtn.Font = Enum.Font.GothamBold; clearBtn.TextSize = 10
 Instance.new("UICorner", clearBtn)
 
 local chatFrame = Instance.new("ScrollingFrame", translatorPage)
-chatFrame.Size = UDim2.new(1, 0, 1, -35)
-chatFrame.Position = UDim2.new(0, 0, 0, 35)
-chatFrame.BackgroundTransparency = 1
-chatFrame.ScrollBarThickness = 2
-chatFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-chatFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-
-local chatLayout = Instance.new("UIListLayout", chatFrame)
-chatLayout.Padding = UDim.new(0, 5)
-chatLayout.SortOrder = Enum.SortOrder.LayoutOrder
+chatFrame.Size = UDim2.new(1, 0, 1, -35); chatFrame.Position = UDim2.new(0, 0, 0, 35); chatFrame.BackgroundTransparency = 1; chatFrame.ScrollBarThickness = 2
+chatFrame.CanvasSize = UDim2.new(0, 0, 0, 0); chatFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+local chatLayout = Instance.new("UIListLayout", chatFrame); chatLayout.Padding = UDim.new(0, 5); chatLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 local function translate(text)
     local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fr&dt=t&q=" .. HttpService:UrlEncode(text)
@@ -248,21 +419,11 @@ end
 
 local function addMessage(sender, original, translated)
     local msgFrame = Instance.new("Frame", chatFrame)
-    msgFrame.Size = UDim2.new(1, -10, 0, 0)
-    msgFrame.AutomaticSize = Enum.AutomaticSize.Y
-    msgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    msgFrame.Size = UDim2.new(1, -10, 0, 0); msgFrame.AutomaticSize = Enum.AutomaticSize.Y; msgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     Instance.new("UICorner", msgFrame).CornerRadius = UDim.new(0, 6)
     local txt = Instance.new("TextLabel", msgFrame)
-    txt.Size = UDim2.new(1, -10, 0, 0)
-    txt.AutomaticSize = Enum.AutomaticSize.Y
-    txt.Position = UDim2.new(0, 5, 0, 5)
-    txt.BackgroundTransparency = 1
-    txt.Font = Enum.Font.Gotham
-    txt.TextSize = 12
-    txt.TextColor3 = Color3.new(1, 1, 1)
-    txt.TextWrapped = true
-    txt.TextXAlignment = Enum.TextXAlignment.Left
-    txt.RichText = true
+    txt.Size = UDim2.new(1, -10, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y; txt.Position = UDim2.new(0, 5, 0, 5)
+    txt.BackgroundTransparency = 1; txt.Font = Enum.Font.Gotham; txt.TextSize = 12; txt.TextColor3 = Color3.new(1, 1, 1); txt.TextWrapped = true; txt.RichText = true
     if translated and translated:lower() ~= original:lower() then
         txt.Text = "<b>" .. sender .. "</b>: " .. translated .. " <font color='#888888' size='10'>[" .. original .. "]</font>"
     else
@@ -273,9 +434,7 @@ local function addMessage(sender, original, translated)
 end
 
 clearBtn.MouseButton1Click:Connect(function()
-    for _, item in pairs(chatFrame:GetChildren()) do
-        if item:IsA("Frame") then item:Destroy() end
-    end
+    for _, item in pairs(chatFrame:GetChildren()) do if item:IsA("Frame") then item:Destroy() end end
 end)
 
 local function setupChatTranslation(targetPlr)
@@ -290,32 +449,6 @@ end
 for _, p in pairs(game.Players:GetPlayers()) do setupChatTranslation(p) end
 game.Players.PlayerAdded:Connect(setupChatTranslation)
 
--- 6. PLAYER PAGE
-createValueSetting(playerPage, "WalkSpeed Value", _G.WalkSpeedValue, function(val) _G.WalkSpeedValue = val end)
-addToggle(playerPage, "Toggle Sprint", function() _G.SprintEnabled = not _G.SprintEnabled return _G.SprintEnabled end)
-createValueSetting(playerPage, "JumpPower Value", _G.JumpPowerValue, function(val) _G.JumpPowerValue = val end)
-addToggle(playerPage, "Toggle Jump", function() _G.JumpEnabled = not _G.JumpEnabled return _G.JumpEnabled end)
-
-addToggle(playerPage, "Float (Plateforme invisible)", function()
-    _G.FloatEnabled = not _G.FloatEnabled
-    if _G.FloatEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        floatHeight = player.Character.HumanoidRootPart.Position.Y - 3.5
-    end
-    return _G.FloatEnabled
-end)
-
-local flyBtn = Instance.new("TextButton", playerPage)
-flyBtn.Size = UDim2.new(1, -5, 0, 35)
-flyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-flyBtn.Text = "FLY GUI"
-flyBtn.TextColor3 = Color3.new(1, 1, 1)
-flyBtn.Font = Enum.Font.GothamBold
-flyBtn.TextSize = 12
-Instance.new("UICorner", flyBtn).CornerRadius = UDim.new(0, 4)
-flyBtn.MouseButton1Click:Connect(function()
-    pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end)
-end)
-
 -- 7. ESP PAGE
 local function applyPlayerESP(targetPlr)
     if targetPlr == player then return end
@@ -323,48 +456,20 @@ local function applyPlayerESP(targetPlr)
         local hum = char:WaitForChild("Humanoid")
         local hrp = char:WaitForChild("HumanoidRootPart")
         local highlight = Instance.new("Highlight", char)
-        highlight.FillTransparency = 0.5
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.FillTransparency = 0.5; highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         local bgui = Instance.new("BillboardGui", char)
-        bgui.Size = UDim2.new(0, 150, 0, 90)
-        bgui.StudsOffset = Vector3.new(0, 4.5, 0)
-        bgui.AlwaysOnTop = true
-        local friendLabel = Instance.new("TextLabel", bgui)
-        friendLabel.Size = UDim2.new(1, 0, 0.15, 0)
-        friendLabel.BackgroundTransparency = 1
-        friendLabel.TextColor3 = Color3.new(0, 1, 0)
-        friendLabel.Font = Enum.Font.GothamBold
-        friendLabel.TextSize = 10
-        friendLabel.Text = "FRIEND"
-        friendLabel.Visible = false
-        local nameLabel = Instance.new("TextLabel", bgui)
-        nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
-        nameLabel.Position = UDim2.new(0, 0, 0.15, 0)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.TextSize = 13
-        local roleLabel = Instance.new("TextLabel", bgui)
-        roleLabel.Size = UDim2.new(1, 0, 0.25, 0)
-        roleLabel.Position = UDim2.new(0, 0, 0.45, 0)
-        roleLabel.BackgroundTransparency = 1
-        roleLabel.Font = Enum.Font.GothamBold
-        roleLabel.TextSize = 11
-        local infoLabel = Instance.new("TextLabel", bgui)
-        infoLabel.Size = UDim2.new(1, 0, 0.25, 0)
-        infoLabel.Position = UDim2.new(0, 0, 0.7, 0)
-        infoLabel.BackgroundTransparency = 1
-        infoLabel.TextColor3 = Color3.new(0, 0, 0) 
-        infoLabel.Font = Enum.Font.GothamBold
-        infoLabel.TextSize = 11
+        bgui.Size = UDim2.new(0, 150, 0, 90); bgui.StudsOffset = Vector3.new(0, 4.5, 0); bgui.AlwaysOnTop = true
+        local friendLabel = Instance.new("TextLabel", bgui); friendLabel.Size = UDim2.new(1, 0, 0.15, 0); friendLabel.BackgroundTransparency = 1; friendLabel.TextColor3 = Color3.new(0, 1, 0); friendLabel.Font = Enum.Font.GothamBold; friendLabel.TextSize = 10; friendLabel.Text = "FRIEND"; friendLabel.Visible = false
+        local nameLabel = Instance.new("TextLabel", bgui); nameLabel.Size = UDim2.new(1, 0, 0.3, 0); nameLabel.Position = UDim2.new(0, 0, 0.15, 0); nameLabel.BackgroundTransparency = 1; nameLabel.Font = Enum.Font.GothamBold; nameLabel.TextSize = 13
+        local roleLabel = Instance.new("TextLabel", bgui); roleLabel.Size = UDim2.new(1, 0, 0.25, 0); roleLabel.Position = UDim2.new(0, 0, 0.45, 0); roleLabel.BackgroundTransparency = 1; roleLabel.Font = Enum.Font.GothamBold; roleLabel.TextSize = 11
+        local infoLabel = Instance.new("TextLabel", bgui); infoLabel.Size = UDim2.new(1, 0, 0.25, 0); infoLabel.Position = UDim2.new(0, 0, 0.7, 0); infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.new(0, 0, 0); infoLabel.Font = Enum.Font.GothamBold; infoLabel.TextSize = 11
         RS.RenderStepped:Connect(function()
             if _G.ESP_ALL_ENABLED and char.Parent and hrp.Parent then
                 local teamColor = targetPlr.TeamColor.Color
                 highlight.Enabled, highlight.OutlineColor, highlight.FillColor = true, teamColor, teamColor
                 friendLabel.Visible = player:IsFriendsWith(targetPlr.UserId)
-                nameLabel.Text = targetPlr.Name
-                nameLabel.TextColor3 = teamColor
-                roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"
-                roleLabel.TextColor3 = teamColor
+                nameLabel.Text = targetPlr.Name; nameLabel.TextColor3 = teamColor
+                roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"; roleLabel.TextColor3 = teamColor
                 local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
                 infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
                 bgui.Enabled = true
@@ -373,41 +478,18 @@ local function applyPlayerESP(targetPlr)
             end
         end)
     end
-    targetPlr.CharacterAdded:Connect(setup)
-    if targetPlr.Character then setup(targetPlr.Character) end
+    targetPlr.CharacterAdded:Connect(setup); if targetPlr.Character then setup(targetPlr.Character) end
 end
 
 local function applyBotESP(model)
-    local hum = model:FindFirstChildOfClass("Humanoid")
-    local hrp = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+    local hum = model:FindFirstChildOfClass("Humanoid"); local hrp = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
     if not hum or not hrp then return end
-    local color = Color3.new(1, 0.8, 0)
-    local highlight = Instance.new("Highlight", model)
-    highlight.FillTransparency = 0.6
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    local bgui = Instance.new("BillboardGui", hrp)
-    bgui.Size = UDim2.new(0, 150, 0, 50)
-    bgui.StudsOffset = Vector3.new(0, 3.5, 0)
-    bgui.AlwaysOnTop = true
-    local nameLabel = Instance.new("TextLabel", bgui)
-    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextColor3 = color
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 14
-    nameLabel.Text = model.Name
-    local infoLabel = Instance.new("TextLabel", bgui)
-    infoLabel.Size = UDim2.new(1, 0, 0.4, 0)
-    infoLabel.Position = UDim2.new(0, 0, 0.45, 0)
-    infoLabel.BackgroundTransparency = 1
-    infoLabel.TextColor3 = Color3.new(0, 0, 0)
-    infoLabel.Font = Enum.Font.GothamSemibold
-    infoLabel.TextSize = 12
-    local conn
-    conn = RS.RenderStepped:Connect(function()
-        if not model.Parent or not hrp.Parent or hum.Health <= 0 then
-            highlight:Destroy(); bgui:Destroy(); conn:Disconnect(); return
-        end
+    local color = Color3.new(1, 0.8, 0); local highlight = Instance.new("Highlight", model); highlight.FillTransparency = 0.6; highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    local bgui = Instance.new("BillboardGui", hrp); bgui.Size = UDim2.new(0, 150, 0, 50); bgui.StudsOffset = Vector3.new(0, 3.5, 0); bgui.AlwaysOnTop = true
+    local nameLabel = Instance.new("TextLabel", bgui); nameLabel.Size = UDim2.new(1, 0, 0.5, 0); nameLabel.BackgroundTransparency = 1; nameLabel.TextColor3 = color; nameLabel.Font = Enum.Font.GothamBold; nameLabel.TextSize = 14; nameLabel.Text = model.Name
+    local infoLabel = Instance.new("TextLabel", bgui); infoLabel.Size = UDim2.new(1, 0, 0.4, 0); infoLabel.Position = UDim2.new(0, 0, 0.45, 0); infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.new(0, 0, 0); infoLabel.Font = Enum.Font.GothamSemibold; infoLabel.TextSize = 12
+    local conn; conn = RS.RenderStepped:Connect(function()
+        if not model.Parent or not hrp.Parent or hum.Health <= 0 then highlight:Destroy(); bgui:Destroy(); conn:Disconnect(); return end
         if _G.ESP_BOTS_ENABLED and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             highlight.Enabled, bgui.Enabled = true, true
             local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
@@ -428,244 +510,107 @@ for _, p in pairs(game.Players:GetPlayers()) do applyPlayerESP(p) end
 game.Players.PlayerAdded:Connect(applyPlayerESP)
 scanForBots()
 
--- 8. ESP PAGE UI
 addToggle(espPage, "ESP Player", function() _G.ESP_ALL_ENABLED = not _G.ESP_ALL_ENABLED return _G.ESP_ALL_ENABLED end)
 addToggle(espPage, "ESP Bot / NPC", function() _G.ESP_BOTS_ENABLED = not _G.ESP_BOTS_ENABLED return _G.ESP_BOTS_ENABLED end)
 
 -- 9. TELEPORT PAGE
-local tpHeaderFrame = Instance.new("Frame", tpPage)
-tpHeaderFrame.Size = UDim2.new(1, 0, 0, 25)
-tpHeaderFrame.BackgroundTransparency = 1
-local tpLabel = Instance.new("TextLabel", tpHeaderFrame)
-tpLabel.Size = UDim2.new(0.7, 0, 1, 0)
-tpLabel.Text = "Teleport to player :"
-tpLabel.TextColor3 = Color3.new(1,1,1)
-tpLabel.BackgroundTransparency = 1
-tpLabel.Font = Enum.Font.GothamBold
-tpLabel.TextSize = 12
-tpLabel.TextXAlignment = Enum.TextXAlignment.Left
-local listVisible = true
-local toggleListBtn = Instance.new("TextButton", tpHeaderFrame)
-toggleListBtn.Size = UDim2.new(0, 30, 0, 20)
-toggleListBtn.Position = UDim2.new(1, -35, 0, 2)
-toggleListBtn.Text = "▲"
-toggleListBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-toggleListBtn.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner", toggleListBtn)
-local tpScroll = Instance.new("ScrollingFrame", tpPage)
-tpScroll.Size = UDim2.new(1, -5, 0, 70)
-tpScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-tpScroll.ScrollBarThickness = 2
-Instance.new("UICorner", tpScroll)
-local tpListLayout = Instance.new("UIListLayout", tpScroll)
-local searchInput = Instance.new("TextBox", tpPage)
-searchInput.Size = UDim2.new(1, -5, 0, 30)
-searchInput.PlaceholderText = "Pseudo..."
-searchInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-searchInput.TextColor3 = Color3.new(1, 1, 1)
-searchInput.TextSize = 12
-Instance.new("UICorner", searchInput)
-local actionFrame = Instance.new("Frame", tpPage)
-actionFrame.Size = UDim2.new(1, -5, 0, 30)
-actionFrame.BackgroundTransparency = 1
-local tpBtn = Instance.new("TextButton", actionFrame)
-tpBtn.Size = UDim2.new(0.48, 0, 1, 0)
-tpBtn.Text = "TELEPORT"
-tpBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-tpBtn.TextColor3 = Color3.new(1,1,1)
-tpBtn.TextSize = 12
-tpBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", tpBtn)
-local specBtn = Instance.new("TextButton", actionFrame)
-specBtn.Size = UDim2.new(0.48, 0, 1, 0)
-specBtn.Position = UDim2.new(0.52, 0, 0, 0)
-specBtn.Text = "SPECTATE"
-specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
-specBtn.TextColor3 = Color3.new(1,1,1)
-specBtn.TextSize = 12
-specBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", specBtn)
+local tpHeaderFrame = Instance.new("Frame", tpPage); tpHeaderFrame.Size = UDim2.new(1, 0, 0, 25); tpHeaderFrame.BackgroundTransparency = 1
+local tpLabel = Instance.new("TextLabel", tpHeaderFrame); tpLabel.Size = UDim2.new(0.7, 0, 1, 0); tpLabel.Text = "Teleport to player :"; tpLabel.TextColor3 = Color3.new(1,1,1); tpLabel.BackgroundTransparency = 1; tpLabel.Font = Enum.Font.GothamBold; tpLabel.TextSize = 12; tpLabel.TextXAlignment = Enum.TextXAlignment.Left
+local listVisible = true; local toggleListBtn = Instance.new("TextButton", tpHeaderFrame); toggleListBtn.Size = UDim2.new(0, 30, 0, 20); toggleListBtn.Position = UDim2.new(1, -35, 0, 2); toggleListBtn.Text = "▲"; toggleListBtn.BackgroundColor3 = Color3.fromRGB(40,40,40); toggleListBtn.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", toggleListBtn)
+local tpScroll = Instance.new("ScrollingFrame", tpPage); tpScroll.Size = UDim2.new(1, -5, 0, 70); tpScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25); tpScroll.ScrollBarThickness = 2; Instance.new("UICorner", tpScroll)
+local tpListLayout = Instance.new("UIListLayout", tpScroll); local searchInput = Instance.new("TextBox", tpPage); searchInput.Size = UDim2.new(1, -5, 0, 30); searchInput.PlaceholderText = "Pseudo..."; searchInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30); searchInput.TextColor3 = Color3.new(1, 1, 1); searchInput.TextSize = 12; Instance.new("UICorner", searchInput)
+local actionFrame = Instance.new("Frame", tpPage); actionFrame.Size = UDim2.new(1, -5, 0, 30); actionFrame.BackgroundTransparency = 1
+local tpBtn = Instance.new("TextButton", actionFrame); tpBtn.Size = UDim2.new(0.48, 0, 1, 0); tpBtn.Text = "TELEPORT"; tpBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255); tpBtn.TextColor3 = Color3.new(1,1,1); tpBtn.TextSize = 12; tpBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", tpBtn)
+local specBtn = Instance.new("TextButton", actionFrame); specBtn.Size = UDim2.new(0.48, 0, 1, 0); specBtn.Position = UDim2.new(0.52, 0, 0, 0); specBtn.Text = "SPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255); specBtn.TextColor3 = Color3.new(1,1,1); specBtn.TextSize = 12; specBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", specBtn)
 
 addToggle(tpPage, "Click TP", function() _G.ClickTPEnabled = not _G.ClickTPEnabled return _G.ClickTPEnabled end)
-
-toggleListBtn.MouseButton1Click:Connect(function()
-    listVisible = not listVisible
-    tpScroll.Visible = listVisible
-    toggleListBtn.Text = listVisible and "▲" or "▼"
-end)
+toggleListBtn.MouseButton1Click:Connect(function() listVisible = not listVisible; tpScroll.Visible = listVisible; toggleListBtn.Text = listVisible and "▲" or "▼" end)
 
 local function updateTPList()
     for _,v in pairs(tpScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
-    for _,p in pairs(game.Players:GetPlayers()) do
-        if p ~= player then
-            local b = Instance.new("TextButton", tpScroll)
-            b.Size = UDim2.new(1, 0, 0, 20)
-            b.BackgroundTransparency = 1
-            b.Text = p.Name
-            b.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-            b.TextSize = 12
-            b.Font = Enum.Font.Gotham
-            b.MouseButton1Click:Connect(function() searchInput.Text = p.Name end)
-        end
-    end
+    for _,p in pairs(game.Players:GetPlayers()) do if p ~= player then local b = Instance.new("TextButton", tpScroll); b.Size = UDim2.new(1, 0, 0, 20); b.BackgroundTransparency = 1; b.Text = p.Name; b.TextColor3 = Color3.new(0.8, 0.8, 0.8); b.TextSize = 12; b.Font = Enum.Font.Gotham; b.MouseButton1Click:Connect(function() searchInput.Text = p.Name end) end end
 end
-game.Players.PlayerAdded:Connect(updateTPList)
-game.Players.PlayerRemoving:Connect(updateTPList)
-updateTPList()
+game.Players.PlayerAdded:Connect(updateTPList); game.Players.PlayerRemoving:Connect(updateTPList); updateTPList()
 
 local function getTargetPlayer()
     local text = searchInput.Text:lower()
-    for _, p in pairs(game.Players:GetPlayers()) do
-        if string.find(p.Name:lower(), text) or string.find(p.DisplayName:lower(), text) then return p end
-    end
+    for _, p in pairs(game.Players:GetPlayers()) do if string.find(p.Name:lower(), text) or string.find(p.DisplayName:lower(), text) then return p end end
     return nil
 end
 
 tpBtn.MouseButton1Click:Connect(function()
-    local target = getTargetPlayer()
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        player.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
-    end
+    local target = getTargetPlayer(); if target and target.Character then player.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame end
 end)
 
 local isSpectating = false
 specBtn.MouseButton1Click:Connect(function()
     isSpectating = not isSpectating
     if isSpectating then
-        local target = getTargetPlayer()
-        if target and target.Character then
-            workspace.CurrentCamera.CameraSubject = target.Character.Humanoid
-            specBtn.Text = "UNSPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        end
+        local target = getTargetPlayer(); if target and target.Character then workspace.CurrentCamera.CameraSubject = target.Character.Humanoid; specBtn.Text = "UNSPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end
     else
-        if player.Character then workspace.CurrentCamera.CameraSubject = player.Character.Humanoid end
-        specBtn.Text = "SPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+        if player.Character then workspace.CurrentCamera.CameraSubject = player.Character.Humanoid end; specBtn.Text = "SPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
     end
 end)
 
-mouse.Button1Down:Connect(function()
-    if _G.ClickTPEnabled and mouse.Target and player.Character then player.Character:MoveTo(mouse.Hit.p) end
-end)
+mouse.Button1Down:Connect(function() if _G.ClickTPEnabled and mouse.Target and player.Character then player.Character:MoveTo(mouse.Hit.p) end end)
 
 -- 10. PAGE DESYNC
 local function createLoadBtn(parent, text, url)
-    local b = Instance.new("TextButton", parent)
-    b.Size = UDim2.new(1, -5, 0, 35)
-    b.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    b.Text = "  " .. text
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 12
-    b.TextXAlignment = Enum.TextXAlignment.Left
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
-    b.MouseButton1Click:Connect(function()
-        pcall(function() loadstring(game:HttpGet(url))() end)
-    end)
+    local b = Instance.new("TextButton", parent); b.Size = UDim2.new(1, -5, 0, 35); b.BackgroundColor3 = Color3.fromRGB(25, 25, 25); b.Text = "  " .. text; b.TextColor3 = Color3.new(1, 1, 1); b.Font = Enum.Font.GothamBold; b.TextSize = 12; b.TextXAlignment = Enum.TextXAlignment.Left; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4); b.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet(url))() end) end)
 end
 
 createLoadBtn(desyncPage, "Desync Delta", "https://pastebin.com/raw/shxUprTU")
 createLoadBtn(desyncPage, "Desync PC", "https://pastebin.com/raw/GwTfyFwL")
 
--- --- PAGE RING ---
+-- PAGE RING
 createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/gFTnZsFf")
 createLoadBtn(ringPage, "Ring For People", "https://pastebin.com/raw/PRaNX1ZK")
-addToggle(ringPage, "Anti-Ring", function()
-    arConfig.enabled = not arConfig.enabled
-    if not arConfig.enabled then arConfig.currentForce = arConfig.baseForce end
-    return arConfig.enabled
-end)
+addToggle(ringPage, "Anti-Ring", function() arConfig.enabled = not arConfig.enabled; if not arConfig.enabled then arConfig.currentForce = arConfig.baseForce end; return arConfig.enabled end)
 
 -- PAGE VISUEL
-addToggle(visualPage, "Infinite Zoom", function()
-    _G.InfZoomEnabled = not _G.InfZoomEnabled
-    if _G.InfZoomEnabled then
-        player.CameraMaxZoomDistance = 10000
-    else
-        player.CameraMaxZoomDistance = originalMaxZoom
-    end
-    return _G.InfZoomEnabled
-end)
+addToggle(visualPage, "Infinite Zoom", function() _G.InfZoomEnabled = not _G.InfZoomEnabled; player.CameraMaxZoomDistance = _G.InfZoomEnabled and 10000 or originalMaxZoom; return _G.InfZoomEnabled end)
+addToggle(visualPage, "Noclip Camera", function() _G.NoclipCamEnabled = not _G.NoclipCamEnabled; player.DevCameraOcclusionMode = _G.NoclipCamEnabled and Enum.DevCameraOcclusionMode.Invisicam or Enum.DevCameraOcclusionMode.Zoom; return _G.NoclipCamEnabled end)
 
-addToggle(visualPage, "Noclip Camera", function()
-    _G.NoclipCamEnabled = not _G.NoclipCamEnabled
-    if _G.NoclipCamEnabled then
-        player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
-    else
-        player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
-    end
-    return _G.NoclipCamEnabled
-end)
+-- PAGE EMOTE
+local loadEmoteScript = Instance.new("TextButton", emotePage); loadEmoteScript.Size = UDim2.new(1, -5, 0, 35); loadEmoteScript.BackgroundColor3 = Color3.fromRGB(45, 45, 45); loadEmoteScript.Text = "EMOTE GUI"; loadEmoteScript.TextColor3 = Color3.new(1, 1, 1); loadEmoteScript.Font = Enum.Font.GothamBold; loadEmoteScript.TextSize = 12; Instance.new("UICorner", loadEmoteScript).CornerRadius = UDim.new(0, 4); loadEmoteScript.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Emote-Gui-75782"))() end) end)
 
--- --- PAGE EMOTE (MODIFIÉ : BOUTON COMME LE FLY) ---
-local loadEmoteScript = Instance.new("TextButton", emotePage)
-loadEmoteScript.Size = UDim2.new(1, -5, 0, 35) -- Taille identique au Fly
-loadEmoteScript.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Couleur identique au Fly
-loadEmoteScript.Text = "EMOTE GUI"
-loadEmoteScript.TextColor3 = Color3.new(1, 1, 1)
-loadEmoteScript.Font = Enum.Font.GothamBold
-loadEmoteScript.TextSize = 12
-Instance.new("UICorner", loadEmoteScript).CornerRadius = UDim.new(0, 4)
-loadEmoteScript.MouseButton1Click:Connect(function()
-    pcall(function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Emote-Gui-75782"))() end)
-end)
-
--- 11. WALK & JUMP LOGIC + FLOAT LOGIC
-local floatPart = Instance.new("Part")
-floatPart.Name = "iiyunus_Float"
-floatPart.Transparency = 1
-floatPart.Size = Vector3.new(6, 1, 6)
-floatPart.Anchored = true
-floatPart.CanCollide = true
-
+-- 11. WALK & JUMP LOGIC (AVEC RETOUR À LA NORMALE SI DÉSACTIVÉ) + FLOAT LOGIC
+local floatPart = Instance.new("Part"); floatPart.Name = "iiyunus_Float"; floatPart.Transparency = 1; floatPart.Size = Vector3.new(6, 1, 6); floatPart.Anchored = true; floatPart.CanCollide = true
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
         local hrp = player.Character:FindFirstChild("HumanoidRootPart")
         
-        if _G.SprintEnabled then hum.WalkSpeed = _G.WalkSpeedValue end
-        if _G.JumpEnabled then
-            hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue
-        else
-            hum.JumpPower = 50
+        -- Stricte logique : activé = custom, désactivé = par défaut (16 et 50)
+        if _G.SprintEnabled then 
+            hum.WalkSpeed = _G.WalkSpeedValue 
+        else 
+            hum.WalkSpeed = 16 
         end
-
-        if _G.FloatEnabled and hrp then
+        
+        if _G.JumpEnabled then 
+            hum.UseJumpPower = true
+            hum.JumpPower = _G.JumpPowerValue 
+        else 
+            hum.JumpPower = 50 
+        end
+        
+        if _G.FloatEnabled and hrp then 
             floatPart.Parent = workspace
-            floatPart.CFrame = CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z)
-        else
-            floatPart.Parent = nil
+            floatPart.CFrame = CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z) 
+        else 
+            floatPart.Parent = nil 
         end
     end
 end)
 
 -- 12. NAVIGATION DES ONGLETS
 local function addTab(name, y, page)
-    local b = Instance.new("TextButton", nav)
-    b.Size = UDim2.new(1, -10, 0, 35)
-    b.Position = UDim2.new(0, 5, 0, y)
-    b.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-    b.Text = name
-    b.TextSize = 12
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Font = Enum.Font.GothamBold
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-    b.MouseButton1Click:Connect(function()
-        playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; 
-        desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; 
-        translatorPage.Visible = false; emotePage.Visible = false
-        page.Visible = true
-    end)
+    local b = Instance.new("TextButton", nav); b.Size = UDim2.new(1, -10, 0, 35); b.Position = UDim2.new(0, 5, 0, y); b.BackgroundColor3 = Color3.fromRGB(28, 28, 28); b.Text = name; b.TextSize = 12; b.TextColor3 = Color3.new(1, 1, 1); b.Font = Enum.Font.GothamBold; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    b.MouseButton1Click:Connect(function() playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false; emotePage.Visible = false; page.Visible = true end)
 end
 
--- Placement des onglets dans la barre défilante
-addTab("PLAYER", 0, playerPage)
-addTab("ESP", 40, espPage)
-addTab("VISUEL", 80, visualPage)
-addTab("TELEPORT", 120, tpPage)
-addTab("RING", 160, ringPage) 
-addTab("DESYNC", 200, desyncPage)
-addTab("TRADUCTION", 240, translatorPage)
-addTab("EMOTE", 280, emotePage) 
+addTab("PLAYER", 0, playerPage); addTab("ESP", 40, espPage); addTab("VISUEL", 80, visualPage); addTab("TELEPORT", 120, tpPage); addTab("RING", 160, ringPage); addTab("DESYNC", 200, desyncPage); addTab("TRADUCTION", 240, translatorPage); addTab("EMOTE", 280, emotePage)
 
 local active = false
 openBtn.MouseButton1Click:Connect(function()
