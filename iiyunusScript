@@ -43,7 +43,7 @@ local arConfig = {
     enabled = false,
     distance = 1000,
     baseForce = 100,
-    maxForce = 5000,
+    maxForce = 50000,
     currentForce = 100
 }
 
