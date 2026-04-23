@@ -43,7 +43,7 @@ local arConfig = {
     enabled = false,
     distance = 1000,
     baseForce = 100,
-    maxForce = 5000,
+    maxForce = 50000,
     currentForce = 100
 }
 
@@ -148,7 +148,7 @@ local playerPage = Instance.new("ScrollingFrame")
 playerPage.Size = UDim2.new(1, 0, 1, 0)
 playerPage.BackgroundTransparency = 1
 playerPage.ScrollBarThickness = 2
-playerPage.CanvasSize = UDim2.new(0, 0, 0, 400)
+playerPage.CanvasSize = UDim2.new(0, 0, 0, 450) -- Ajusté pour le nouveau bouton
 playerPage.Visible = false
 playerPage.Parent = container
 local pLayout = Instance.new("UIListLayout", playerPage)
@@ -188,7 +188,7 @@ local function addToggle(parent, text, callback)
     end)
 end
 
--- COMPOSANTS "CÔTE À CÔTE" POUR PLAYER PAGE (TAILLES AGRANDIES)
+-- COMPOSANTS "CÔTE À CÔTE" POUR PLAYER PAGE
 local function createHalfArrowSetting(parent, labelText, defaultValue, callbackValue, posScaleX)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(0.48, 0, 1, 0)
@@ -309,21 +309,18 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- REMPLISSAGE PLAYER PAGE (TON DESIGN)
+-- REMPLISSAGE PLAYER PAGE
 -- ==========================================
--- Ligne 1 : Speed Value | Jump Value 
 local row1 = Instance.new("Frame", playerPage)
 row1.Size = UDim2.new(1, -5, 0, 48) 
 row1.BackgroundTransparency = 1
 createHalfArrowSetting(row1, "Speed Value", _G.WalkSpeedValue, function(v) _G.WalkSpeedValue = v end, 0)
 createHalfArrowSetting(row1, "Jump Value", _G.JumpPowerValue, function(v) _G.JumpPowerValue = v end, 0.52)
 
--- Ligne 2 : Toggle Speed | Toggle Jump
 local row2 = Instance.new("Frame", playerPage)
 row2.Size = UDim2.new(1, -5, 0, 35)
 row2.BackgroundTransparency = 1
 
--- CORRECTION ICI : Le script rend sa vitesse au jeu quand on désactive
 createHalfToggle(row2, "Toggle Speed", function() 
     _G.SprintEnabled = not _G.SprintEnabled 
     if not _G.SprintEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
@@ -332,7 +329,6 @@ createHalfToggle(row2, "Toggle Speed", function()
     return _G.SprintEnabled 
 end, 0)
 
--- CORRECTION ICI : Le script rend son saut au jeu quand on désactive
 createHalfToggle(row2, "Toggle Jump", function() 
     _G.JumpEnabled = not _G.JumpEnabled 
     if not _G.JumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
@@ -341,12 +337,10 @@ createHalfToggle(row2, "Toggle Jump", function()
     return _G.JumpEnabled 
 end, 0.52)
 
--- L'ESPACE DE SÉPARATION
 local spacer = Instance.new("Frame", playerPage)
 spacer.Size = UDim2.new(1, 0, 0, 10)
 spacer.BackgroundTransparency = 1
 
--- Float
 addToggle(playerPage, "Float (Plateforme)", function()
     _G.FloatEnabled = not _G.FloatEnabled
     if _G.FloatEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
@@ -355,14 +349,12 @@ addToggle(playerPage, "Float (Plateforme)", function()
     return _G.FloatEnabled
 end)
 
--- Anti-Fling
 addToggle(playerPage, "Anti-Fling", function() 
     _G.AntiFlingEnabled = not _G.AntiFlingEnabled 
     if not _G.AntiFlingEnabled then resetPlayersCollision() end
     return _G.AntiFlingEnabled 
 end)
 
--- VFLY
 local vflyBtn = Instance.new("TextButton", playerPage)
 vflyBtn.Size = UDim2.new(1, -5, 0, 35)
 vflyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
@@ -373,7 +365,6 @@ vflyBtn.TextSize = 12
 Instance.new("UICorner", vflyBtn).CornerRadius = UDim.new(0, 4)
 vflyBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/waRVejBW"))() end) end)
 
--- FLY GUI
 local flyGuiBtn = Instance.new("TextButton", playerPage)
 flyGuiBtn.Size = UDim2.new(1, -5, 0, 35)
 flyGuiBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
@@ -383,6 +374,19 @@ flyGuiBtn.Font = Enum.Font.GothamBold
 flyGuiBtn.TextSize = 12
 Instance.new("UICorner", flyGuiBtn).CornerRadius = UDim.new(0, 4)
 flyGuiBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end) end)
+
+-- AJOUT DU BOUTON UNBAN VC
+local unbanVcBtn = Instance.new("TextButton", playerPage)
+unbanVcBtn.Size = UDim2.new(1, -5, 0, 35)
+unbanVcBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+unbanVcBtn.Text = "unban vc"
+unbanVcBtn.TextColor3 = Color3.new(1, 1, 1)
+unbanVcBtn.Font = Enum.Font.GothamBold
+unbanVcBtn.TextSize = 12
+Instance.new("UICorner", unbanVcBtn).CornerRadius = UDim.new(0, 4)
+unbanVcBtn.MouseButton1Click:Connect(function() 
+    pcall(function() game:GetService("VoiceChatService"):joinVoice() end) 
+end)
 
 -- --- LOGIQUE ANTI-RING ---
 RS.Heartbeat:Connect(function()
@@ -570,13 +574,13 @@ end)
 
 mouse.Button1Down:Connect(function() if _G.ClickTPEnabled and mouse.Target and player.Character then player.Character:MoveTo(mouse.Hit.p) end end)
 
--- 10. PAGE DESYNC
+-- 10. PAGE DESYNC (AVEC CHOCOLA DESYNC)
 local function createLoadBtn(parent, text, url)
     local b = Instance.new("TextButton", parent); b.Size = UDim2.new(1, -5, 0, 35); b.BackgroundColor3 = Color3.fromRGB(25, 25, 25); b.Text = "  " .. text; b.TextColor3 = Color3.new(1, 1, 1); b.Font = Enum.Font.GothamBold; b.TextSize = 12; b.TextXAlignment = Enum.TextXAlignment.Left; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4); b.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet(url))() end) end)
 end
 
-createLoadBtn(desyncPage, "Desync Delta", "https://pastebin.com/raw/shxUprTU")
-createLoadBtn(desyncPage, "Desync PC", "https://pastebin.com/raw/GwTfyFwL")
+-- Remplacement des anciens Desync par Chocola
+createLoadBtn(desyncPage, "Chocola Desync", "https://raw.githubusercontent.com/chocolascript-glitch/Chocola.script/refs/heads/main/Chocola-Desync-no-auto-grab.lua")
 
 -- PAGE RING
 createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/gFTnZsFf")
@@ -590,29 +594,18 @@ addToggle(visualPage, "Noclip Camera", function() _G.NoclipCamEnabled = not _G.N
 -- PAGE EMOTE
 local loadEmoteScript = Instance.new("TextButton", emotePage); loadEmoteScript.Size = UDim2.new(1, -5, 0, 35); loadEmoteScript.BackgroundColor3 = Color3.fromRGB(45, 45, 45); loadEmoteScript.Text = "EMOTE GUI"; loadEmoteScript.TextColor3 = Color3.new(1, 1, 1); loadEmoteScript.Font = Enum.Font.GothamBold; loadEmoteScript.TextSize = 12; Instance.new("UICorner", loadEmoteScript).CornerRadius = UDim.new(0, 4); loadEmoteScript.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Emote-Gui-75782"))() end) end)
 
--- 11. WALK & JUMP LOGIC (CORRIGÉE : LE JEU REPREND LE CONTRÔLE QUAND DÉSACTIVÉ) + FLOAT LOGIC
+-- 11. WALK & JUMP LOGIC + FLOAT LOGIC
 local floatPart = Instance.new("Part"); floatPart.Name = "iiyunus_Float"; floatPart.Transparency = 1; floatPart.Size = Vector3.new(6, 1, 6); floatPart.Anchored = true; floatPart.CanCollide = true
 RS.RenderStepped:Connect(function()
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         local hum = player.Character.Humanoid
         local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-        
-        -- Si activé, on force les valeurs custom. Si désactivé, on ne fait RIEN (le jeu gère).
-        if _G.SprintEnabled then 
-            hum.WalkSpeed = _G.WalkSpeedValue 
-        end
-        
-        if _G.JumpEnabled then 
-            hum.UseJumpPower = true
-            hum.JumpPower = _G.JumpPowerValue 
-        end
-        
+        if _G.SprintEnabled then hum.WalkSpeed = _G.WalkSpeedValue end
+        if _G.JumpEnabled then hum.UseJumpPower = true; hum.JumpPower = _G.JumpPowerValue end
         if _G.FloatEnabled and hrp then 
             floatPart.Parent = workspace
             floatPart.CFrame = CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z) 
-        else 
-            floatPart.Parent = nil 
-        end
+        else floatPart.Parent = nil end
     end
 end)
 
