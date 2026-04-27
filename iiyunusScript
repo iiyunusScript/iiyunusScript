@@ -395,7 +395,7 @@ vflyBtn.TextColor3 = Color3.new(1, 1, 1)
 vflyBtn.Font = Enum.Font.GothamBold
 vflyBtn.TextSize = 12
 Instance.new("UICorner", vflyBtn).CornerRadius = UDim.new(0, 4)
-vflyBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/jrB6TdzE"))() end) end)
+vflyBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/J3z1esh9"))() end) end)
 
 local flyGuiBtn = Instance.new("TextButton", playerPage)
 flyGuiBtn.Size = UDim2.new(1, -5, 0, 35)
