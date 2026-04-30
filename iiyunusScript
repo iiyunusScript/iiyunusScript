@@ -7,58 +7,13 @@ local players = game:GetService("Players")
 local player = players.LocalPlayer
 local pGui = player:WaitForChild("PlayerGui")
 local lighting = game:GetService("Lighting")
-
-local randomGuiName = HttpService:GenerateGUID(false)
-
-local function cleanOldGuis(parent)
-    pcall(function()
-        for _, v in pairs(parent:GetChildren()) do
-            if v:IsA("ScreenGui") and v:FindFirstChild("UAP_Tag") then
-                v:Destroy()
-            end
-        end
-    end)
-end
-
-pcall(function() if gethui then cleanOldGuis(gethui()) end end)
-cleanOldGuis(coreGui)
-cleanOldGuis(pGui)
-
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local mouse = player:GetMouse()
 
-local originalMaxZoom = player.CameraMaxZoomDistance
-local originalLighting = {
-    Ambient = lighting.Ambient,
-    Brightness = lighting.Brightness,
-    GlobalShadows = lighting.GlobalShadows,
-    OutdoorAmbient = lighting.OutdoorAmbient,
-    ClockTime = lighting.ClockTime,
-    FogEnd = lighting.FogEnd,
-    ColorShift_Bottom = lighting.ColorShift_Bottom,
-    ColorShift_Top = lighting.ColorShift_Top
-}
-local originalTransparencies = {}
-local fullBrightConnection = nil
-
-local originalWalkSpeed = 16
-local originalJumpPower = 50
-
-player.CharacterAdded:Connect(function()
-    task.wait(0.1)
-    if player.Character and player.Character:FindFirstChild("Humanoid") then
-        originalWalkSpeed = player.Character.Humanoid.WalkSpeed
-        originalJumpPower = player.Character.Humanoid.JumpPower
-    end
-end)
-
-if player.Character then
-    originalWalkSpeed = player.Character.Humanoid.WalkSpeed
-    originalJumpPower = player.Character.Humanoid.JumpPower
-end
-
+-- === CONFIGURATION ET AUTO-SAVE ===
+local SETTINGS_FILE = "Script_settings.json"
 local config = {
     ESP_ALL_ENABLED = false,
     ESP_BOTS_ENABLED = false,
@@ -76,8 +31,6 @@ local config = {
     XRayEnabled = false
 }
 
-local floatHeight = 0 
-
 local arConfig = {
     enabled = false,
     distance = 1000,
@@ -85,6 +38,131 @@ local arConfig = {
     maxForce = 50000,
     currentForce = 100
 }
+
+local function saveSettings()
+    if writefile then
+        pcall(function()
+            local saveTable = {main = config, ring = arConfig.enabled}
+            writefile(SETTINGS_FILE, HttpService:JSONEncode(saveTable))
+        end)
+    end
+end
+
+local function loadSettings()
+    if isfile and isfile(SETTINGS_FILE) then
+        pcall(function()
+            local decoded = HttpService:JSONDecode(readfile(SETTINGS_FILE))
+            if decoded.main then
+                for k, v in pairs(decoded.main) do config[k] = v end
+            end
+            if decoded.ring ~= nil then arConfig.enabled = decoded.ring end
+        end)
+    end
+end
+
+loadSettings()
+
+local randomGuiName = HttpService:GenerateGUID(false)
+
+local function cleanOldGuis(parent)
+    pcall(function()
+        for _, v in pairs(parent:GetChildren()) do
+            if v:IsA("ScreenGui") and v:FindFirstChild("UAP_Tag") then
+                v:Destroy()
+            end
+        end
+    end)
+end
+
+pcall(function() if gethui then cleanOldGuis(gethui()) end end)
+cleanOldGuis(coreGui)
+cleanOldGuis(pGui)
+
+local originalMaxZoom = player.CameraMaxZoomDistance
+local originalLighting = {
+    Ambient = lighting.Ambient,
+    Brightness = lighting.Brightness,
+    GlobalShadows = lighting.GlobalShadows,
+    OutdoorAmbient = lighting.OutdoorAmbient,
+    ClockTime = lighting.ClockTime,
+    FogEnd = lighting.FogEnd,
+    ColorShift_Bottom = lighting.ColorShift_Bottom,
+    ColorShift_Top = lighting.ColorShift_Top
+}
+local originalTransparencies = {}
+local originalProperties = {} 
+local fullBrightConnection = nil
+
+local originalWalkSpeed = 16
+local originalJumpPower = 50
+
+local updateNoclipUI = nil 
+
+local function applyGhostMode(enabled)
+    local char = player.Character
+    if not char then return end
+
+    if enabled then
+        originalProperties = {}
+        for _, part in pairs(char:GetDescendants()) do
+            if (part:IsA("BasePart") or part:IsA("Decal")) and part.Name ~= "HumanoidRootPart" then
+                originalProperties[part] = {
+                    Transparency = part.Transparency,
+                    CanCollide = part:IsA("BasePart") and part.CanCollide or nil
+                }
+                if part.Transparency < 1 then
+                    part.Transparency = 0.5 
+                end
+            end
+        end
+    else
+        for part, props in pairs(originalProperties) do
+            if part and part.Parent then
+                part.Transparency = props.Transparency
+                if part:IsA("BasePart") and props.CanCollide ~= nil then
+                    part.CanCollide = props.CanCollide
+                end
+            end
+        end
+        originalProperties = {}
+    end
+end
+
+player.CharacterAdded:Connect(function(char)
+    task.wait(0.1)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then
+        originalWalkSpeed = hum.WalkSpeed
+        originalJumpPower = hum.JumpPower
+        
+        hum.Died:Connect(function()
+            if config.NoclipEnabled then
+                config.NoclipEnabled = false
+                applyGhostMode(false)
+                if updateNoclipUI then updateNoclipUI(false) end
+                saveSettings()
+            end
+        end)
+    end
+    originalProperties = {} 
+    
+    if config.InfZoomEnabled then player.CameraMaxZoomDistance = math.huge end
+    if config.NoclipCamEnabled then player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end
+    if config.NoclipEnabled then applyGhostMode(true) end
+end)
+
+player:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
+    if config.InfZoomEnabled and player.CameraMaxZoomDistance ~= math.huge then
+        player.CameraMaxZoomDistance = math.huge
+    end
+end)
+
+if player.Character and player.Character:FindFirstChild("Humanoid") then
+    originalWalkSpeed = player.Character.Humanoid.WalkSpeed
+    originalJumpPower = player.Character.Humanoid.JumpPower
+end
+
+local floatHeight = 0 
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = randomGuiName
@@ -212,7 +290,12 @@ local desyncPage = createPage()
 local translatorPage = createPage()
 local emotePage = createPage()
 
-local function addToggle(parent, text, callback)
+local updateESPLogic
+local updateBotESPLogic
+local updateXRayLogic
+local updateFullBrightLogic
+
+local function addToggle(parent, text, configKey, callback)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(1, -5, 0, 35)
     btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -225,18 +308,38 @@ local function addToggle(parent, text, callback)
     local statusBox = Instance.new("Frame", btn)
     statusBox.Size = UDim2.new(0, 16, 0, 16)
     statusBox.Position = UDim2.new(1, -26, 0.5, -8)
-    statusBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    
+    local isEnabled = false
+    if configKey == "AntiRingEnabled" then isEnabled = arConfig.enabled else isEnabled = config[configKey] end
+    
+    statusBox.BackgroundColor3 = isEnabled and Color3.new(1, 1, 1) or Color3.fromRGB(15, 15, 15)
     Instance.new("UICorner", statusBox).CornerRadius = UDim.new(0, 4)
     local stroke = Instance.new("UIStroke", statusBox)
-    stroke.Color = Color3.fromRGB(70, 70, 70)
+    stroke.Color = isEnabled and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
+    
+    local function updateVisual(state)
+        statusBox.BackgroundColor3 = state and Color3.new(1, 1, 1) or Color3.fromRGB(15, 15, 15)
+        stroke.Color = state and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
+    end
+
     btn.MouseButton1Click:Connect(function()
-        local enabled = callback()
-        statusBox.BackgroundColor3 = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(15, 15, 15)
-        stroke.Color = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
+        local newState
+        if configKey == "AntiRingEnabled" then
+            arConfig.enabled = not arConfig.enabled
+            newState = arConfig.enabled
+        else
+            config[configKey] = not config[configKey]
+            newState = config[configKey]
+        end
+        if callback then callback(newState) end
+        updateVisual(newState)
+        saveSettings()
     end)
+    
+    if text == "Noclip" then updateNoclipUI = updateVisual end
 end
 
-local function createHalfArrowSetting(parent, labelText, defaultValue, callbackValue, posScaleX)
+local function createHalfArrowSetting(parent, labelText, configKey, callbackValue, posScaleX)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(0.48, 0, 1, 0)
     frame.Position = UDim2.new(posScaleX, 0, 0, 0)
@@ -256,7 +359,7 @@ local function createHalfArrowSetting(parent, labelText, defaultValue, callbackV
     input.Size = UDim2.new(0, 40, 0, 20) 
     input.Position = UDim2.new(0.5, -20, 0.5, 4)
     input.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    input.Text = tostring(defaultValue)
+    input.Text = tostring(config[configKey])
     input.TextColor3 = Color3.new(1, 1, 1)
     input.Font = Enum.Font.GothamBold
     input.TextSize = 12 
@@ -265,7 +368,9 @@ local function createHalfArrowSetting(parent, labelText, defaultValue, callbackV
     local function update(val)
         local num = tonumber(val) or 0
         input.Text = tostring(num)
-        callbackValue(num)
+        config[configKey] = num
+        if callbackValue then callbackValue(num) end
+        saveSettings()
     end
     
     local function createBtn(txt, xOffset, delta)
@@ -292,7 +397,7 @@ local function createHalfArrowSetting(parent, labelText, defaultValue, callbackV
     input.FocusLost:Connect(function() update(input.Text) end)
 end
 
-local function createHalfToggle(parent, text, callback, posScaleX)
+local function createHalfToggle(parent, text, configKey, callback, posScaleX)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0.48, 0, 1, 0)
     btn.Position = UDim2.new(posScaleX, 0, 0, 0)
@@ -307,48 +412,48 @@ local function createHalfToggle(parent, text, callback, posScaleX)
     local statusBox = Instance.new("Frame", btn)
     statusBox.Size = UDim2.new(0, 16, 0, 16) 
     statusBox.Position = UDim2.new(1, -22, 0.5, -8)
-    statusBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    statusBox.BackgroundColor3 = config[configKey] and Color3.new(1, 1, 1) or Color3.fromRGB(15, 15, 15)
     Instance.new("UICorner", statusBox).CornerRadius = UDim.new(0, 4)
     local stroke = Instance.new("UIStroke", statusBox)
-    stroke.Color = Color3.fromRGB(70, 70, 70)
+    stroke.Color = config[configKey] and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
     
     btn.MouseButton1Click:Connect(function()
-        local enabled = callback()
+        config[configKey] = not config[configKey]
+        local enabled = config[configKey]
+        if callback then callback(enabled) end
         statusBox.BackgroundColor3 = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(15, 15, 15)
         stroke.Color = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(70, 70, 70)
-    end)
-end
-
-local function resetPlayersCollision()
-    pcall(function()
-        for _, v in pairs(players:GetPlayers()) do
-            if v ~= player and v.Character then
-                for _, part in pairs(v.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = true end
-                end
-            end
-        end
+        saveSettings()
     end)
 end
 
 RS.Stepped:Connect(function()
     pcall(function()
-        if config.NoclipEnabled and player.Character then
-            for _, part in pairs(player.Character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
+        if player.Character then
+            if config.NoclipEnabled then
+                for _, part in pairs(player.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
                 end
             end
-        end
-        
-        if config.AntiFlingEnabled then
-            for _, v in pairs(players:GetPlayers()) do
-                if v ~= player and v.Character then
-                    for _, part in pairs(v.Character:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                            part.Velocity = Vector3.new(0, 0, 0)
-                            part.RotVelocity = Vector3.new(0, 0, 0)
+            
+            if config.AntiFlingEnabled then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if hrp.AssemblyLinearVelocity.Magnitude > 200 then
+                        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                    end
+                end
+                for _, v in pairs(players:GetPlayers()) do
+                    if v ~= player and v.Character then
+                        for _, part in pairs(v.Character:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.CanCollide = false
+                                part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                                part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                            end
                         end
                     end
                 end
@@ -360,83 +465,68 @@ end)
 local row1 = Instance.new("Frame", playerPage)
 row1.Size = UDim2.new(1, -5, 0, 48) 
 row1.BackgroundTransparency = 1
-createHalfArrowSetting(row1, "Speed Value", config.WalkSpeedValue, function(v) config.WalkSpeedValue = v end, 0)
-createHalfArrowSetting(row1, "Jump Value", config.JumpPowerValue, function(v) config.JumpPowerValue = v end, 0.52)
+createHalfArrowSetting(row1, "Speed Value", "WalkSpeedValue", nil, 0)
+createHalfArrowSetting(row1, "Jump Value", "JumpPowerValue", nil, 0.52)
 
 local row2 = Instance.new("Frame", playerPage)
 row2.Size = UDim2.new(1, -5, 0, 35)
 row2.BackgroundTransparency = 1
 
-createHalfToggle(row2, "Toggle Speed", function() 
-    config.SprintEnabled = not config.SprintEnabled 
-    if not config.SprintEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+createHalfToggle(row2, "Toggle Speed", "SprintEnabled", function(enabled) 
+    if not enabled and player.Character and player.Character:FindFirstChild("Humanoid") then
         player.Character.Humanoid.WalkSpeed = originalWalkSpeed
     end
-    return config.SprintEnabled 
 end, 0)
 
-createHalfToggle(row2, "Toggle Jump", function() 
-    config.JumpEnabled = not config.JumpEnabled 
-    if not config.JumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+createHalfToggle(row2, "Toggle Jump", "JumpEnabled", function(enabled) 
+    if not enabled and player.Character and player.Character:FindFirstChild("Humanoid") then
         player.Character.Humanoid.JumpPower = originalJumpPower
     end
-    return config.JumpEnabled 
 end, 0.52)
 
 local spacer = Instance.new("Frame", playerPage)
 spacer.Size = UDim2.new(1, 0, 0, 10)
 spacer.BackgroundTransparency = 1
 
-addToggle(playerPage, "Float (Plateforme)", function()
-    config.FloatEnabled = not config.FloatEnabled
-    if config.FloatEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+addToggle(playerPage, "Float (Plateforme)", "FloatEnabled", function(enabled)
+    if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         floatHeight = player.Character.HumanoidRootPart.Position.Y - 3.5
     end
-    return config.FloatEnabled
 end)
 
-addToggle(playerPage, "Noclip", function()
-    config.NoclipEnabled = not config.NoclipEnabled
-    return config.NoclipEnabled
+addToggle(playerPage, "Noclip", "NoclipEnabled", function(enabled)
+    applyGhostMode(enabled)
 end)
 
-addToggle(playerPage, "Anti-Fling", function() 
-    config.AntiFlingEnabled = not config.AntiFlingEnabled 
-    if not config.AntiFlingEnabled then resetPlayersCollision() end
-    return config.AntiFlingEnabled 
+addToggle(playerPage, "Anti-Fling", "AntiFlingEnabled", function(enabled) 
+    if not enabled then 
+        pcall(function()
+            for _, v in pairs(players:GetPlayers()) do
+                if v ~= player and v.Character then
+                    for _, part in pairs(v.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = true end
+                    end
+                end
+            end
+        end)
+    end
 end)
 
-local vflyBtn = Instance.new("TextButton", playerPage)
-vflyBtn.Size = UDim2.new(1, -5, 0, 35)
-vflyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-vflyBtn.Text = "VFLY"
-vflyBtn.TextColor3 = Color3.new(1, 1, 1)
-vflyBtn.Font = Enum.Font.GothamBold
-vflyBtn.TextSize = 12
-Instance.new("UICorner", vflyBtn).CornerRadius = UDim.new(0, 4)
-vflyBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/EfZpAH6b"))() end) end)
+local function createScriptBtn(parent, text, url)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(1, -5, 0, 35)
+    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    btn.Text = text
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    btn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet(url))() end) end)
+end
 
-local flyGuiBtn = Instance.new("TextButton", playerPage)
-flyGuiBtn.Size = UDim2.new(1, -5, 0, 35)
-flyGuiBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-flyGuiBtn.Text = "FLY GUI"
-flyGuiBtn.TextColor3 = Color3.new(1, 1, 1)
-flyGuiBtn.Font = Enum.Font.GothamBold
-flyGuiBtn.TextSize = 12
-Instance.new("UICorner", flyGuiBtn).CornerRadius = UDim.new(0, 4)
-flyGuiBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))() end) end)
-
-local extraScriptBtn = Instance.new("TextButton", playerPage)
-extraScriptBtn.Size = UDim2.new(1, -5, 0, 35)
-extraScriptBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-extraScriptBtn.Text = "LIVE STATS"
-extraScriptBtn.TextColor3 = Color3.new(1, 1, 1)
-extraScriptBtn.Font = Enum.Font.GothamBold
-extraScriptBtn.TextSize = 12
-Instance.new("UICorner", extraScriptBtn).CornerRadius = UDim.new(0, 4)
-extraScriptBtn.MouseButton1Click:Connect(function() 
-    pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/nnNcz3Vt"))() end) 
-end)
+createScriptBtn(playerPage, "VFLY", "https://pastebin.com/raw/EfZpAH6b")
+createScriptBtn(playerPage, "FLY GUI", "https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt")
+createScriptBtn(playerPage, "LIVE STATS", "https://pastebin.com/raw/nnNcz3Vt")
 
 local unbanVcBtn = Instance.new("TextButton", playerPage)
 unbanVcBtn.Size = UDim2.new(1, -5, 0, 35)
@@ -457,11 +547,12 @@ RS.Heartbeat:Connect(function()
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
     local found = false
+    
     for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") and not v.Anchored and not v:IsDescendantOf(char) then
+        if v:IsA("BasePart") and not v.Anchored and not v:IsDescendantOf(char) and v.Name ~= "Terrain" then
             if not v.Parent:FindFirstChild("Humanoid") then
                 local dist = (v.Position - root.Position).Magnitude
-                if dist <= arConfig.distance then
+                if dist <= arConfig.distance and dist > 7 then
                     found = true
                     local dir = (v.Position - root.Position).Unit
                     v.Velocity = (dir + Vector3.new(0, 0.1, 0)) * arConfig.currentForce
@@ -498,19 +589,29 @@ local function translate(text)
 end
 
 local function addMessage(sender, original, translated)
+    local maxScroll = chatLayout.AbsoluteContentSize.Y - chatFrame.AbsoluteWindowSize.Y
+    local isAtBottom = true
+    if maxScroll > 0 then
+        isAtBottom = (chatFrame.CanvasPosition.Y >= maxScroll - 40)
+    end
+
     local msgFrame = Instance.new("Frame", chatFrame)
     msgFrame.Size = UDim2.new(1, -10, 0, 0); msgFrame.AutomaticSize = Enum.AutomaticSize.Y; msgFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     Instance.new("UICorner", msgFrame).CornerRadius = UDim.new(0, 6)
     local txt = Instance.new("TextLabel", msgFrame)
     txt.Size = UDim2.new(1, -10, 0, 0); txt.AutomaticSize = Enum.AutomaticSize.Y; txt.Position = UDim2.new(0, 5, 0, 5)
     txt.BackgroundTransparency = 1; txt.Font = Enum.Font.Gotham; txt.TextSize = 12; txt.TextColor3 = Color3.new(1, 1, 1); txt.TextWrapped = true; txt.RichText = true
+    
     if translated and translated:lower() ~= original:lower() then
         txt.Text = "<b>" .. sender .. "</b>: " .. translated .. " <font color='#888888' size='10'>[" .. original .. "]</font>"
     else
         txt.Text = "<b>" .. sender .. "</b>: " .. original
     end
+    
     task.wait(0.05)
-    chatFrame.CanvasPosition = Vector2.new(0, chatLayout.AbsoluteContentSize.Y)
+    if isAtBottom then
+        chatFrame.CanvasPosition = Vector2.new(0, chatLayout.AbsoluteContentSize.Y)
+    end
 end
 
 clearBtn.MouseButton1Click:Connect(function()
@@ -529,90 +630,167 @@ end
 for _, p in pairs(game.Players:GetPlayers()) do setupChatTranslation(p) end
 game.Players.PlayerAdded:Connect(setupChatTranslation)
 
-local function applyPlayerESP(targetPlr)
-    if targetPlr == player then return end
-    local function setup(char)
-        local hum = char:WaitForChild("Humanoid", 5)
-        local hrp = char:WaitForChild("HumanoidRootPart", 5)
-        if not hum or not hrp then return end
-        local highlight = Instance.new("Highlight", char)
-        highlight.FillTransparency = 0.5; highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        local bgui = Instance.new("BillboardGui", char)
-        bgui.Size = UDim2.new(0, 150, 0, 90); bgui.StudsOffset = Vector3.new(0, 4.5, 0); bgui.AlwaysOnTop = true
-        local friendLabel = Instance.new("TextLabel", bgui); friendLabel.Size = UDim2.new(1, 0, 0.15, 0); friendLabel.BackgroundTransparency = 1; friendLabel.TextColor3 = Color3.new(0, 1, 0); friendLabel.Font = Enum.Font.GothamBold; friendLabel.TextSize = 10; friendLabel.Text = "FRIEND"; friendLabel.Visible = false
-        local nameLabel = Instance.new("TextLabel", bgui); nameLabel.Size = UDim2.new(1, 0, 0.3, 0); nameLabel.Position = UDim2.new(0, 0, 0.15, 0); nameLabel.BackgroundTransparency = 1; nameLabel.Font = Enum.Font.GothamBold; nameLabel.TextSize = 13
-        local roleLabel = Instance.new("TextLabel", bgui); roleLabel.Size = UDim2.new(1, 0, 0.25, 0); roleLabel.Position = UDim2.new(0, 0, 0.45, 0); roleLabel.BackgroundTransparency = 1; roleLabel.Font = Enum.Font.GothamBold; roleLabel.TextSize = 11
-        local infoLabel = Instance.new("TextLabel", bgui); infoLabel.Size = UDim2.new(1, 0, 0.25, 0); infoLabel.Position = UDim2.new(0, 0, 0.7, 0); infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.new(0, 0, 0); infoLabel.Font = Enum.Font.GothamBold; infoLabel.TextSize = 11
-        RS.RenderStepped:Connect(function()
-            if config.ESP_ALL_ENABLED and char.Parent and hrp.Parent then
-                local teamColor = targetPlr.TeamColor and targetPlr.TeamColor.Color or Color3.new(1,1,1)
-                highlight.Enabled, highlight.OutlineColor, highlight.FillColor = true, teamColor, teamColor
-                friendLabel.Visible = player:IsFriendsWith(targetPlr.UserId)
-                nameLabel.Text = targetPlr.Name; nameLabel.TextColor3 = teamColor
-                roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"; roleLabel.TextColor3 = teamColor
-                local dist = 0
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
-                end
-                infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
-                bgui.Enabled = true
-            else
-                highlight.Enabled, bgui.Enabled = false, false
-            end
-        end)
+-- === SYSTEME ESP INCASSABLE (Scanner en boucle) ===
+local espPlayers = {}
+local espBots = {}
+
+local function cleanPlayerESP(targetPlr)
+    if espPlayers[targetPlr] then
+        if espPlayers[targetPlr].highlight then espPlayers[targetPlr].highlight:Destroy() end
+        if espPlayers[targetPlr].bgui then espPlayers[targetPlr].bgui:Destroy() end
+        if espPlayers[targetPlr].conn then espPlayers[targetPlr].conn:Disconnect() end
+        espPlayers[targetPlr] = nil
     end
-    targetPlr.CharacterAdded:Connect(setup); if targetPlr.Character then setup(targetPlr.Character) end
+end
+
+local function getAttachmentPart(char)
+    if not char then return nil end
+    return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head") or char:FindFirstChildWhichIsA("BasePart")
+end
+
+-- Boucle de nettoyage et de scan pour les joueurs
+task.spawn(function()
+    while task.wait(1) do
+        if config.ESP_ALL_ENABLED then
+            for _, targetPlr in pairs(players:GetPlayers()) do
+                if targetPlr ~= player then
+                    local char = targetPlr.Character
+                    if char and char.Parent then
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        local attachPart = getAttachmentPart(char)
+                        
+                        -- Création de l'ESP si absent mais que le joueur est bien chargé physiquement (MODIFIÉ : ignore la barre de vie)
+                        if hum and attachPart and not espPlayers[targetPlr] then
+                            local highlight = Instance.new("Highlight")
+                            highlight.FillTransparency = 0.5
+                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            highlight.Parent = char
+                            
+                            local bgui = Instance.new("BillboardGui")
+                            bgui.Size = UDim2.new(0, 150, 0, 90)
+                            bgui.StudsOffset = Vector3.new(0, 4.5, 0)
+                            bgui.AlwaysOnTop = true
+                            bgui.Parent = attachPart
+                            
+                            local friendLabel = Instance.new("TextLabel", bgui); friendLabel.Size = UDim2.new(1, 0, 0.15, 0); friendLabel.BackgroundTransparency = 1; friendLabel.TextColor3 = Color3.new(0, 1, 0); friendLabel.Font = Enum.Font.GothamBold; friendLabel.TextSize = 10; friendLabel.Text = "FRIEND"; friendLabel.Visible = false
+                            local nameLabel = Instance.new("TextLabel", bgui); nameLabel.Size = UDim2.new(1, 0, 0.3, 0); nameLabel.Position = UDim2.new(0, 0, 0.15, 0); nameLabel.BackgroundTransparency = 1; nameLabel.Font = Enum.Font.GothamBold; nameLabel.TextSize = 13
+                            local roleLabel = Instance.new("TextLabel", bgui); roleLabel.Size = UDim2.new(1, 0, 0.25, 0); roleLabel.Position = UDim2.new(0, 0, 0.45, 0); roleLabel.BackgroundTransparency = 1; roleLabel.Font = Enum.Font.GothamBold; roleLabel.TextSize = 11
+                            local infoLabel = Instance.new("TextLabel", bgui); infoLabel.Size = UDim2.new(1, 0, 0.25, 0); infoLabel.Position = UDim2.new(0, 0, 0.7, 0); infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.new(0, 0, 0); infoLabel.Font = Enum.Font.GothamBold; infoLabel.TextSize = 11
+                            
+                            local conn = RS.RenderStepped:Connect(function()
+                                -- MODIFIÉ : Ne se supprime plus si Health <= 0
+                                if not config.ESP_ALL_ENABLED or not char.Parent or not attachPart.Parent then
+                                    cleanPlayerESP(targetPlr)
+                                    return
+                                end
+                                
+                                local teamColor = targetPlr.TeamColor and targetPlr.TeamColor.Color or Color3.new(1,1,1)
+                                highlight.Enabled = true
+                                highlight.OutlineColor = teamColor
+                                highlight.FillColor = teamColor
+                                
+                                friendLabel.Visible = player:IsFriendsWith(targetPlr.UserId)
+                                nameLabel.Text = targetPlr.Name
+                                nameLabel.TextColor3 = teamColor
+                                roleLabel.Text = targetPlr.Team and targetPlr.Team.Name or "Neutral"
+                                roleLabel.TextColor3 = teamColor
+                                
+                                local dist = 0
+                                local myAttach = getAttachmentPart(player.Character)
+                                if myAttach then
+                                    dist = math.floor((myAttach.Position - attachPart.Position).Magnitude)
+                                end
+                                infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
+                            end)
+                            
+                            espPlayers[targetPlr] = {highlight = highlight, bgui = bgui, conn = conn}
+                        end
+                    end
+                end
+            end
+        else
+            for p, _ in pairs(espPlayers) do cleanPlayerESP(p) end
+        end
+    end
+end)
+
+updateESPLogic = function(enabled)
+    if not enabled then
+        for _, p in pairs(players:GetPlayers()) do cleanPlayerESP(p) end
+    end
+end
+
+local function cleanBotESP(model)
+    if espBots[model] then
+        if espBots[model].highlight then espBots[model].highlight:Destroy() end
+        if espBots[model].bgui then espBots[model].bgui:Destroy() end
+        if espBots[model].conn then espBots[model].conn:Disconnect() end
+        espBots[model] = nil
+    end
 end
 
 local function applyBotESP(model)
+    if not config.ESP_BOTS_ENABLED then return end
     local hum = model:FindFirstChildOfClass("Humanoid")
-    local hrp = model:FindFirstChild("HumanoidRootPart")
-    if not hrp then hrp = model:FindFirstChild("Head") end
+    if not hum then return end
+    local hrp = getAttachmentPart(model)
     if not hrp then return end
-    local color = Color3.new(1, 0.8, 0); local highlight = Instance.new("Highlight", model); highlight.FillTransparency = 0.6; highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    
+    cleanBotESP(model)
+    
+    local color = Color3.new(1, 0.8, 0)
+    local highlight = Instance.new("Highlight", model); highlight.FillTransparency = 0.6; highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     local bgui = Instance.new("BillboardGui", hrp); bgui.Size = UDim2.new(0, 150, 0, 50); bgui.StudsOffset = Vector3.new(0, 3.5, 0); bgui.AlwaysOnTop = true
     local nameLabel = Instance.new("TextLabel", bgui); nameLabel.Size = UDim2.new(1, 0, 0.5, 0); nameLabel.BackgroundTransparency = 1; nameLabel.TextColor3 = color; nameLabel.Font = Enum.Font.GothamBold; nameLabel.TextSize = 14; nameLabel.Text = model.Name
     local infoLabel = Instance.new("TextLabel", bgui); infoLabel.Size = UDim2.new(1, 0, 0.4, 0); infoLabel.Position = UDim2.new(0, 0, 0.45, 0); infoLabel.BackgroundTransparency = 1; infoLabel.TextColor3 = Color3.new(0, 0, 0); infoLabel.Font = Enum.Font.GothamSemibold; infoLabel.TextSize = 12
-    local conn; conn = RS.RenderStepped:Connect(function()
-        if not model.Parent or not hrp.Parent or hum.Health <= 0 then highlight:Destroy(); bgui:Destroy(); conn:Disconnect(); return end
-        if config.ESP_BOTS_ENABLED and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            highlight.Enabled, bgui.Enabled = true, true
-            local dist = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
+    
+    local conn = RS.RenderStepped:Connect(function()
+        -- MODIFIÉ : Ne se supprime plus si Health <= 0
+        if not config.ESP_BOTS_ENABLED or not model.Parent or not hrp.Parent then 
+            cleanBotESP(model) 
+            return 
+        end
+        local myAttach = getAttachmentPart(player.Character)
+        if myAttach then
+            local dist = math.floor((myAttach.Position - hrp.Position).Magnitude)
             infoLabel.Text = math.floor(hum.Health) .. " HP | " .. dist .. "m"
-        else
-            highlight.Enabled, bgui.Enabled = false, false
         end
     end)
+    espBots[model] = {highlight = highlight, bgui = bgui, conn = conn}
 end
 
-local function scanForBots()
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("Humanoid") and not game.Players:GetPlayerFromCharacter(v.Parent) then applyBotESP(v.Parent) end
+updateBotESPLogic = function(enabled)
+    if enabled then
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Humanoid") and not players:GetPlayerFromCharacter(v.Parent) then applyBotESP(v.Parent) end
+        end
+    else
+        for model, _ in pairs(espBots) do cleanBotESP(model) end
     end
 end
-
-for _, p in pairs(game.Players:GetPlayers()) do applyPlayerESP(p) end
-game.Players.PlayerAdded:Connect(applyPlayerESP)
-scanForBots()
 
 workspace.DescendantAdded:Connect(function(v)
     if v:IsA("Humanoid") then
         task.wait(0.5) 
-        if not game.Players:GetPlayerFromCharacter(v.Parent) then
+        if not players:GetPlayerFromCharacter(v.Parent) then
             applyBotESP(v.Parent)
         end
     end
 end)
 
-addToggle(espPage, "ESP Player", function() config.ESP_ALL_ENABLED = not config.ESP_ALL_ENABLED return config.ESP_ALL_ENABLED end)
-addToggle(espPage, "ESP Bot / NPC", function() config.ESP_BOTS_ENABLED = not config.ESP_BOTS_ENABLED return config.ESP_BOTS_ENABLED end)
+addToggle(espPage, "ESP Player", "ESP_ALL_ENABLED", updateESPLogic)
+addToggle(espPage, "ESP Bot / NPC", "ESP_BOTS_ENABLED", updateBotESPLogic)
 
-addToggle(visualPage, "Infinite Zoom", function() config.InfZoomEnabled = not config.InfZoomEnabled; player.CameraMaxZoomDistance = config.InfZoomEnabled and 100000 or originalMaxZoom; return config.InfZoomEnabled end)
-addToggle(visualPage, "Noclip Camera", function() config.NoclipCamEnabled = not config.NoclipCamEnabled; player.DevCameraOcclusionMode = config.NoclipCamEnabled and Enum.DevCameraOcclusionMode.Invisicam or Enum.DevCameraOcclusionMode.Zoom; return config.NoclipCamEnabled end)
+addToggle(visualPage, "Infinite Zoom", "InfZoomEnabled", function(enabled) 
+    player.CameraMaxZoomDistance = enabled and math.huge or originalMaxZoom 
+end)
 
-addToggle(visualPage, "Full Bright", function()
-    config.FullBrightEnabled = not config.FullBrightEnabled
-    if config.FullBrightEnabled then
+addToggle(visualPage, "Noclip Camera", "NoclipCamEnabled", function(enabled) 
+    player.DevCameraOcclusionMode = enabled and Enum.DevCameraOcclusionMode.Invisicam or Enum.DevCameraOcclusionMode.Zoom 
+end)
+
+updateFullBrightLogic = function(enabled)
+    if enabled then
         fullBrightConnection = RS.RenderStepped:Connect(function()
             pcall(function()
                 lighting.Ambient = Color3.new(1, 1, 1)
@@ -641,14 +819,14 @@ addToggle(visualPage, "Full Bright", function()
             lighting.FogEnd = originalLighting.FogEnd
         end)
     end
-    return config.FullBrightEnabled
-end)
+end
 
-addToggle(visualPage, "X-Ray", function()
-    config.XRayEnabled = not config.XRayEnabled
+addToggle(visualPage, "Full Bright", "FullBrightEnabled", updateFullBrightLogic)
+
+updateXRayLogic = function(enabled)
     task.spawn(function()
         pcall(function()
-            if config.XRayEnabled then
+            if enabled then
                 for _, v in pairs(workspace:GetDescendants()) do
                     if v:IsA("BasePart") and not v.Parent:FindFirstChild("Humanoid") and not v:IsDescendantOf(player.Character) and v.Name ~= "Terrain" then
                         if originalTransparencies[v] == nil then
@@ -667,8 +845,9 @@ addToggle(visualPage, "X-Ray", function()
             end
         end)
     end)
-    return config.XRayEnabled
-end)
+end
+
+addToggle(visualPage, "X-Ray", "XRayEnabled", updateXRayLogic)
 
 local tpHeaderFrame = Instance.new("Frame", tpPage); tpHeaderFrame.Size = UDim2.new(1, 0, 0, 25); tpHeaderFrame.BackgroundTransparency = 1
 local tpLabel = Instance.new("TextLabel", tpHeaderFrame); tpLabel.Size = UDim2.new(0.7, 0, 1, 0); tpLabel.Text = "Teleport to player :"; tpLabel.TextColor3 = Color3.new(1,1,1); tpLabel.BackgroundTransparency = 1; tpLabel.Font = Enum.Font.GothamBold; tpLabel.TextSize = 12; tpLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -679,32 +858,57 @@ local actionFrame = Instance.new("Frame", tpPage); actionFrame.Size = UDim2.new(
 local tpBtn = Instance.new("TextButton", actionFrame); tpBtn.Size = UDim2.new(0.48, 0, 1, 0); tpBtn.Text = "TELEPORT"; tpBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255); tpBtn.TextColor3 = Color3.new(1,1,1); tpBtn.TextSize = 12; tpBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", tpBtn)
 local specBtn = Instance.new("TextButton", actionFrame); specBtn.Size = UDim2.new(0.48, 0, 1, 0); specBtn.Position = UDim2.new(0.52, 0, 0, 0); specBtn.Text = "SPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255); specBtn.TextColor3 = Color3.new(1,1,1); specBtn.TextSize = 12; specBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", specBtn)
 
-addToggle(tpPage, "Click TP", function() config.ClickTPEnabled = not config.ClickTPEnabled return config.ClickTPEnabled end)
+addToggle(tpPage, "Click TP", "ClickTPEnabled")
+
 toggleListBtn.MouseButton1Click:Connect(function() listVisible = not listVisible; tpScroll.Visible = listVisible; toggleListBtn.Text = listVisible and "▲" or "▼" end)
 
 local function updateTPList()
     for _,v in pairs(tpScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
-    for _,p in pairs(game.Players:GetPlayers()) do if p ~= player then local b = Instance.new("TextButton", tpScroll); b.Size = UDim2.new(1, 0, 0, 20); b.BackgroundTransparency = 1; b.Text = p.Name; b.TextColor3 = Color3.new(0.8, 0.8, 0.8); b.TextSize = 12; b.Font = Enum.Font.Gotham; b.MouseButton1Click:Connect(function() searchInput.Text = p.Name end) end end
+    for _,p in pairs(players:GetPlayers()) do if p ~= player then local b = Instance.new("TextButton", tpScroll); b.Size = UDim2.new(1, 0, 0, 20); b.BackgroundTransparency = 1; b.Text = p.Name; b.TextColor3 = Color3.new(0.8, 0.8, 0.8); b.TextSize = 12; b.Font = Enum.Font.Gotham; b.MouseButton1Click:Connect(function() searchInput.Text = p.Name end) end end
 end
-game.Players.PlayerAdded:Connect(updateTPList); game.Players.PlayerRemoving:Connect(updateTPList); updateTPList()
+players.PlayerAdded:Connect(updateTPList); players.PlayerRemoving:Connect(updateTPList); updateTPList()
 
 local function getTargetPlayer()
     local text = searchInput.Text:lower()
-    for _, p in pairs(game.Players:GetPlayers()) do if string.find(p.Name:lower(), text) or string.find(p.DisplayName:lower(), text) then return p end end
+    for _, p in pairs(players:GetPlayers()) do if string.find(p.Name:lower(), text) or string.find(p.DisplayName:lower(), text) then return p end end
     return nil
 end
 
 tpBtn.MouseButton1Click:Connect(function()
-    local target = getTargetPlayer(); if target and target.Character then player.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame end
+    local target = getTargetPlayer()
+    if target and target.Character and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and target.Character:FindFirstChild("HumanoidRootPart") then 
+        player.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame 
+    end
 end)
 
 local isSpectating = false
+local spectateConnection = nil
+
 specBtn.MouseButton1Click:Connect(function()
     isSpectating = not isSpectating
-    if isSpectating then
-        local target = getTargetPlayer(); if target and target.Character then workspace.CurrentCamera.CameraSubject = target.Character.Humanoid; specBtn.Text = "UNSPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end
+    local target = getTargetPlayer()
+    
+    if isSpectating and target then
+        if spectateConnection then spectateConnection:Disconnect() end
+        spectateConnection = RS.RenderStepped:Connect(function()
+            if target.Character and target.Character:FindFirstChild("Humanoid") then
+                workspace.CurrentCamera.CameraSubject = target.Character.Humanoid
+            else
+                isSpectating = false
+                spectateConnection:Disconnect()
+                workspace.CurrentCamera.CameraSubject = player.Character and player.Character:FindFirstChild("Humanoid")
+                specBtn.Text = "SPECTATE"
+                specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+            end
+        end)
+        specBtn.Text = "UNSPECTATE"
+        specBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     else
-        if player.Character then workspace.CurrentCamera.CameraSubject = player.Character.Humanoid end; specBtn.Text = "SPECTATE"; specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+        isSpectating = false
+        if spectateConnection then spectateConnection:Disconnect() end
+        if player.Character then workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid") end
+        specBtn.Text = "SPECTATE"
+        specBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
     end
 end)
 
@@ -718,7 +922,10 @@ createLoadBtn(desyncPage, "Desync Delta", "https://raw.githubusercontent.com/cho
 
 createLoadBtn(ringPage, "Ring For Yourself", "https://pastebin.com/raw/gFTnZsFf")
 createLoadBtn(ringPage, "Ring For People", "https://pastebin.com/raw/PRaNX1ZK")
-addToggle(ringPage, "Anti-Ring", function() arConfig.enabled = not arConfig.enabled; if not arConfig.enabled then arConfig.currentForce = arConfig.baseForce end; return arConfig.enabled end)
+
+addToggle(ringPage, "Anti-Ring", "AntiRingEnabled", function(enabled)
+    if not enabled then arConfig.currentForce = arConfig.baseForce end
+end)
 
 local loadEmoteScript = Instance.new("TextButton", emotePage); loadEmoteScript.Size = UDim2.new(1, -5, 0, 35); loadEmoteScript.BackgroundColor3 = Color3.fromRGB(45, 45, 45); loadEmoteScript.Text = "EMOTE GUI"; loadEmoteScript.TextColor3 = Color3.new(1, 1, 1); loadEmoteScript.Font = Enum.Font.GothamBold; loadEmoteScript.TextSize = 12; Instance.new("UICorner", loadEmoteScript).CornerRadius = UDim.new(0, 4); loadEmoteScript.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Emote-Gui-75782"))() end) end)
 
@@ -748,9 +955,44 @@ RS.RenderStepped:Connect(function()
     end)
 end)
 
+local tabs = {} 
+
 local function addTab(name, y, page)
-    local b = Instance.new("TextButton", nav); b.Size = UDim2.new(1, -10, 0, 35); b.Position = UDim2.new(0, 5, 0, y); b.BackgroundColor3 = Color3.fromRGB(28, 28, 28); b.Text = name; b.TextSize = 12; b.TextColor3 = Color3.new(1, 1, 1); b.Font = Enum.Font.GothamBold; Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-    b.MouseButton1Click:Connect(function() playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false; emotePage.Visible = false; page.Visible = true end)
+    local b = Instance.new("TextButton", nav)
+    b.Size = UDim2.new(1, -10, 0, 35)
+    b.Position = UDim2.new(0, 5, 0, y)
+    b.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    b.Text = name
+    b.TextSize = 12
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    
+    local scaleObj = Instance.new("UIScale", b)
+    scaleObj.Scale = 1
+    
+    table.insert(tabs, {button = b, defaultColor = Color3.fromRGB(28, 28, 28), activeColor = Color3.fromRGB(65, 65, 65)})
+
+    b.MouseEnter:Connect(function()
+        TweenService:Create(scaleObj, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1.1}):Play()
+    end)
+    
+    b.MouseLeave:Connect(function()
+        TweenService:Create(scaleObj, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1}):Play()
+    end)
+
+    b.MouseButton1Click:Connect(function()
+        playerPage.Visible = false; espPage.Visible = false; tpPage.Visible = false; desyncPage.Visible = false; ringPage.Visible = false; visualPage.Visible = false; translatorPage.Visible = false; emotePage.Visible = false
+        page.Visible = true 
+        
+        for _, t in pairs(tabs) do
+            if t.button == b then
+                TweenService:Create(t.button, TweenInfo.new(0.2), {BackgroundColor3 = t.activeColor}):Play()
+            else
+                TweenService:Create(t.button, TweenInfo.new(0.2), {BackgroundColor3 = t.defaultColor}):Play()
+            end
+        end
+    end)
 end
 
 addTab("PLAYER", 0, playerPage)
@@ -762,6 +1004,8 @@ addTab("DESYNC", 200, desyncPage)
 addTab("TRADUCTION", 240, translatorPage)
 addTab("EMOTE", 280, emotePage)
 
+TweenService:Create(tabs[1].button, TweenInfo.new(0), {BackgroundColor3 = tabs[1].activeColor}):Play()
+
 local active = false
 openBtn.MouseButton1Click:Connect(function()
     active = not active
@@ -770,3 +1014,13 @@ openBtn.MouseButton1Click:Connect(function()
 end)
 
 playerPage.Visible = true
+
+task.spawn(function()
+    if config.InfZoomEnabled then player.CameraMaxZoomDistance = math.huge end
+    if config.NoclipCamEnabled then player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end
+    if config.ESP_ALL_ENABLED then updateESPLogic(true) end
+    if config.ESP_BOTS_ENABLED then updateBotESPLogic(true) end
+    if config.FullBrightEnabled then updateFullBrightLogic(true) end
+    if config.XRayEnabled then updateXRayLogic(true) end
+    if config.NoclipEnabled then applyGhostMode(true) end
+end)
